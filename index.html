@@ -1,0 +1,995 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Take-out">
+<meta name="theme-color" content="#ffffff"><meta name="robots" content="noindex,nofollow">
+<link rel="apple-touch-icon" href="icon.png"><link rel="icon" href="icon.png">
+<style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<script>
+// 독립 페이지용 연결부: 아티팩트의 claude.use(...) 자리에 Supabase 함수(takeout-api)를 직접 부르는 구현을 끼운다.
+// 열쇠는 코드에 없다 — 주소 끝의 #k=... 에서 읽고, 이 기기에 기억해 둔다.
+(() => {
+  const API = "https://omigzdxdxywtjsfzimks.supabase.co/functions/v1/takeout-api";
+  let k = (location.hash.match(/k=([^&]+)/) || [])[1] || "";
+  try { if (k) localStorage.setItem("takeout-key", k); else k = localStorage.getItem("takeout-key") || ""; } catch (_) {}
+  const url = (api) => `${API}?k=${encodeURIComponent(k)}&api=${api}`;
+  const j = async (r) => {
+    if (!r.ok) { const e = new Error(`HTTP ${r.status}`); e.code = r.status === 403 ? "열쇠가 맞지 않아요" : `HTTP ${r.status}`; throw e; }
+    return r.json();
+  };
+  const ns = {
+    mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }) },
+    user: { id: async () => "shared" },
+    db: { doc: () => ({
+      get: async () => { const d = (await j(await fetch(url("state"), { cache: "no-store" }))).data; return { exists: !!d, data: () => d }; },
+      set: async (v) => { await j(await fetch(url("state"), { method: "POST", body: JSON.stringify(v) })); }, // 글자 본문 = 사전 요청 없는 단순 POST
+    }) },
+    // 이미지는 iPhone 공유 시트로 바로 넘긴다
+    downloads: { save: async ({ filename, data }) => {
+      const f = new File([data], filename, { type: "image/png" });
+      const err = (code) => Object.assign(new Error(code), { code });
+      if (!navigator.canShare || !navigator.canShare({ files: [f] })) throw err("unavailable");
+      try { await navigator.share({ files: [f] }); return { status: "saved" }; }
+      catch (e) { throw err(e && e.name === "AbortError" ? "declined" : "unavailable"); }
+    } },
+  };
+  window.claude = { use: async (n) => (k ? ns[n] || null : null) };
+
+  // 열쇠 없이 열렸을 때: 열쇠(또는 열쇠가 붙은 주소)를 한 번 붙여 넣게 한다
+  if (!k) addEventListener("DOMContentLoaded", () => {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;inset:0;z-index:99;background:#fff;display:grid;place-content:center;gap:12px;padding:24px;font:400 15px -apple-system,system-ui,sans-serif;color:#1D1B14;text-align:center";
+    box.innerHTML = `<b style="font-size:17px">열쇠가 필요해요</b><span style="color:rgba(29,27,20,.5);font-size:13px">받은 주소 전체나 열쇠를 붙여 넣어 주세요</span>
+      <input id="kin" autocomplete="off" autocapitalize="off" style="font:inherit;padding:12px 14px;border-radius:12px;border:0;background:rgba(29,27,20,.06);width:min(280px,80vw);text-align:center">
+      <button id="kgo" style="font:600 15px inherit;padding:12px;border-radius:999px;border:0;background:#5B5121;color:#fff">열기</button>`;
+    document.body.appendChild(box);
+    box.querySelector("#kgo").addEventListener("click", () => {
+      const v = box.querySelector("#kin").value.trim(), m = v.match(/k=([^&\s]+)/);
+      const key = m ? m[1] : v; if (!key) return;
+      try { localStorage.setItem("takeout-key", key); } catch (_) {}
+      location.hash = `k=${key}`; location.reload();
+    });
+  });
+
+  // 다시 앞으로 꺼냈을 때 오래됐으면 새로 읽는다 — 상대가 고른 것과 새 메뉴가 보이게
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) hiddenAt = Date.now();
+    else if (hiddenAt && Date.now() - hiddenAt > 60_000) location.reload();
+  });
+})();
+</script></head><body>
+<title>R5 테이크아웃</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Asta+Sans:wght@300;400;600&family=Jost:wght@400;500&display=swap">
+<style>
+/* Layout: deep green header band (date + meal) → sticky category rail → 2-col tile grid → fixed tray with coin meter and copy.
+   Point colour: basil green + egg-yolk yellow — away from Samsung blue and Welstory orange, warm and appetising. */
+:root {
+  --bg: #FFFFFF;
+  --tile: #FFFFFF;
+  --page: #FFFFFF;
+  --card: #F6F5F2;
+  --ink: #1D1B14;
+  --muted: rgba(29, 27, 20, .5);
+  --line: rgba(29, 27, 20, .1);
+  --band: #5B5121;
+  --band-ink: #FBF5EC;
+  --band-dim: rgba(251, 245, 236, .62);
+  --gold: #EBDD8E;
+  --gold-deep: #5B5121;
+  --sel: #FCE2C3;
+  --sel-ink: #2A2510;
+  --btn: #5B5121;
+  --btn-ink: #FFFFFF;
+  --edge: rgba(91, 81, 33, .32);
+  --soft: #F0E9C8;
+  --warn: #ED6328;
+  --heart: #ED6328;
+  --coin: #5B5121;
+  --well: rgba(29, 27, 20, .06);
+  --coin-pick: #BFA732;
+  --mark: #EBDD8E;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif;
+  --mono: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121210; --tile: #2A2922; --page: #121210; --card: #1C1B17; --ink: #F3ECDD; --muted: rgba(243, 236, 221, .58); --line: rgba(243, 236, 221, .13);
+    --band: #2B2610; --band-ink: #F3ECDD; --band-dim: rgba(243, 236, 221, .5); --gold: #E6D588; --gold-deep: #CDB84A;
+    --sel: #F6DDB8; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121210; --tile: #2A2922; --page: #121210; --card: #1C1B17; --ink: #F3ECDD; --muted: rgba(243, 236, 221, .58); --line: rgba(243, 236, 221, .13);
+    --band: #2B2610; --band-ink: #F3ECDD; --band-dim: rgba(243, 236, 221, .5); --gold: #E6D588; --gold-deep: #CDB84A;
+    --sel: #F6DDB8; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+button { touch-action: manipulation; }
+.tile .add *, .radd * { pointer-events: none; }
+/* 글자: 11 / 13 / 15 / 17 / 34, 굵기 400 · 600. 간격: 4의 배수. 모서리: 카드 14, 컨트롤 10, 알약 999. 선 대신 면으로 구분. */
+body { background: var(--page); color: var(--ink); font: 300 15px/1.4 var(--sans); -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
+.gutter { max-width: 640px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.combo-h b, .fold-t, .sheet .sh b { text-transform: uppercase; letter-spacing: .06em; }
+.rq, .qty, .pill b, .kc { font-variant-numeric: tabular-nums; }
+
+/* header — 1) 식당·갱신 시각(작게) 2) 날짜 제목 + 끼니 3) 카테고리 + 보기 전환 */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: .5px solid var(--line); }
+.band .gutter { padding-block: 14px 14px; display: grid; gap: 14px; }
+.util { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rtabs { display: flex; gap: 14px; }
+.rtabs button { font-size: 13px; color: var(--muted); padding: 2px 0; }
+.rtabs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+#stamp { font-size: 11px; color: var(--muted); }
+.when { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.week { display: flex; gap: 16px; align-items: baseline; min-width: 0; }
+.day { display: inline-flex; align-items: baseline; gap: 5px; color: var(--muted); position: relative; }
+.day .dn { font-size: 17px; font-weight: 400; line-height: 1; font-variant-numeric: tabular-nums; }
+.day .wl { font-size: 13px; line-height: 1; }
+.day[aria-pressed="true"] { color: var(--ink); }
+.day[aria-pressed="true"] .dn { font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
+.day[aria-pressed="true"] .wl { font-size: 17px; font-weight: 600; }
+.day.today::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--heart); align-self: flex-start; margin: 2px 0 0 -2px; }
+.sg { display: inline-flex; flex: none; background: var(--well); border-radius: 999px; padding: 3px; min-width: 0; }
+.sg button { flex: none; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 400; line-height: 1.2; color: var(--muted); text-align: center; white-space: nowrap; }
+.sg button[aria-pressed="true"] { background: var(--tile); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(29, 27, 20, .12); }
+.sg .cnt { font-size: 11px; font-weight: 600; color: var(--heart); margin-left: 4px; }
+
+/* category rail */
+.rail .gutter { display: flex; align-items: center; gap: 8px; padding-block: 0 12px; }
+.rs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
+.rs::-webkit-scrollbar { display: none; }
+.rs::after { content: ""; flex: none; width: 16px; }
+.vbtn { flex: none; width: 36px; height: 32px; border-radius: 999px; background: var(--well); display: grid; place-items: center; color: var(--ink); }
+.vbtn svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
+.rail button[data-cat], .rail .editbtn { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--ink); display: inline-flex; gap: 4px; align-items: center; }
+.rail button .n { font-size: 11px; opacity: .45; }
+.rail button[aria-pressed="true"][data-cat] { background: var(--btn); color: var(--btn-ink); font-weight: 600; }
+.rail button.has::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--gold-deep); }
+.rail button[aria-pressed="true"].has::after { background: var(--btn-ink); }
+.rail button .hrt { color: var(--heart); width: 11px; height: 11px; }
+.rail .editbtn { color: var(--muted); }
+.rail .editbtn[aria-pressed="true"] { background: var(--soft); color: var(--gold-deep); }
+.rail button.off { text-decoration: line-through; opacity: .5; }
+
+/* list */
+main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)); }
+.hint { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+.hint .hrt { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; }
+.viewopt { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: 0 0 24px; }
+.viewopt .sg { flex: none; }
+.viewopt .sg { padding: 3px; box-shadow: 0 0 0 .5px var(--line); }
+.viewopt .sg button { width: 36px; padding: 6px 0; display: grid; place-items: center; color: var(--muted); }
+.viewopt .sg button[aria-pressed="true"] { color: var(--ink); }
+.viewopt .sg svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
+.blkhint { margin-right: auto; font-size: 13px; color: var(--muted); }
+.cap { grid-column: 1 / -1; margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.cap.sep { margin-top: 28px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 520px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* tiles — 목록 줄과 같은 문법을 카드로: 체크 원, 이름, 보조 줄, 수량 캡슐 */
+.tile { position: relative; background: var(--card); border-radius: 14px; min-width: 0; display: grid; }
+.tile .add { display: grid; grid-template-rows: auto auto 1fr; gap: 8px; align-content: start; width: 100%; padding: 14px 14px 16px; }
+.tile .lead { margin-bottom: 8px; }
+.tile .name { font-size: 15px; font-weight: 400; line-height: 1.3; overflow-wrap: anywhere; }
+.tile .rsub { align-self: start; flex-wrap: wrap; row-gap: 4px; }
+.tile.on, .combo[aria-pressed="true"], .rows li.on { background: var(--soft); }
+.tile.on .lead { background: var(--btn); box-shadow: none; }
+.tile.on .lead svg { opacity: 1; }
+.tile.on .add { padding-bottom: 58px; }
+.tile .rq { position: absolute; right: 12px; bottom: 12px; }
+.coin { display: flex; align-items: center; gap: 3px; min-height: 16px; color: var(--coin); }
+.coin i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.coin.pk i { background: var(--coin-pick); }
+.coin i.o { background: transparent; border: 1.5px solid currentColor; }
+.coin .v { font-size: 11px; line-height: 1; color: var(--muted); }
+.tile .meta { font-size: 12px; color: var(--muted); }
+.star { position: absolute; top: 6px; right: 4px; width: 40px; height: 40px; color: var(--muted); display: grid; place-items: center; }
+.hrt { width: 14px; height: 14px; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; pointer-events: none; }
+.hrt.f { fill: currentColor; }
+.star[aria-pressed="true"], .rstar[aria-pressed="true"] { color: var(--heart); }
+.grid > .gh { grid-column: 1 / -1; margin: 12px 16px -4px; }
+.grid > .gh:first-child { margin-top: 0; }
+.tile.muted { opacity: .38; }
+.tile.muted .name { text-decoration: line-through; }
+.tile.blk .add, .rows li.blk .radd { opacity: .3; }
+.editbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.editbar .hint { margin: 0; }
+.catoff { padding: 6px 12px; border-radius: 999px; font-size: 13px; background: var(--well); }
+
+/* rows — iOS 묶음 목록: 머리글은 카드 밖, 줄은 제목+보조 줄, 구분선은 글자 시작점부터 */
+.gh { margin: 24px 16px 8px; font-size: 13px; color: var(--muted); }
+.gh:first-of-type { margin-top: 0; }
+.rows { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 14px; overflow: hidden; }
+.rows li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 40px; align-items: center; min-height: 60px; padding-left: 16px; }
+.rows li + li::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: .5px; background: var(--line); }
+.radd { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 12px; min-width: 0; padding: 14px 8px 14px 0; }
+.radd .lead { margin-top: -1px; } /* 체크 원을 이름 첫 줄의 가운데에 */
+.lead { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); display: grid; place-items: center; }
+.lead svg { width: 12px; height: 12px; fill: none; stroke: var(--btn-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.rows li.on .lead { background: var(--btn); box-shadow: none; }
+.rows li.on .lead svg { opacity: 1; }
+.rt { display: grid; gap: 7px; min-width: 0; }
+.rname { font-size: 15px; line-height: 1.3; font-weight: 400; overflow-wrap: anywhere; }
+.rsub { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.2; color: var(--muted); min-width: 0; }
+.rsub .coin { min-height: 0; flex: none; }
+.rsub .coin i { width: 6px; height: 6px; }
+.rq { display: inline-flex; align-items: center; font-size: 15px; font-variant-numeric: tabular-nums; }
+.rq:not(:empty) { background: var(--well); border-radius: 999px; padding: 2px; }
+.rq span { min-width: 20px; text-align: center; }
+.rq button { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 400 17px/1 var(--sans); }
+.rstar { width: 40px; height: 44px; color: var(--muted); display: grid; place-items: center; }
+.fold { margin-top: 8px; }
+.fold-h { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 0; }
+.fold-t { font: 600 11px var(--mono); }
+.fold-h .n { font-size: 13px; color: var(--muted); }
+
+/* combos */
+.combos { display: grid; gap: 12px; margin-bottom: 24px; }
+@media (min-width: 520px) { .combos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.combo { border-radius: 14px; padding: 16px; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: start; background: var(--card); min-width: 0; width: 100%; }
+.combo * { pointer-events: none; }
+.combo .lead { margin-top: -3px; }
+.combo-b { display: grid; gap: 10px; min-width: 0; }
+.combo-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+.combo-h b { font: 600 11px var(--mono); color: var(--ink); }
+.ci { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: start; font-size: 15px; line-height: 1.3; }
+.ci .coin { height: 1.3em; min-height: 0; }
+.ci > span:last-child { overflow-wrap: anywhere; }
+.combo[aria-pressed="true"] .lead { background: var(--btn); box-shadow: none; }
+.combo[aria-pressed="true"] .lead svg { opacity: 1; }
+.empty { padding: 40px 0; color: var(--muted); display: grid; gap: 12px; justify-items: start; }
+.empty button { padding: 10px 16px; border-radius: 10px; background: var(--well); color: var(--ink); }
+
+/* tray */
+.tray { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 6; max-width: 616px; margin: 0 auto; background: var(--tile); border-radius: 26px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29, 27, 20, .14); }
+.tray .gutter { display: grid; gap: 12px; padding: 14px 14px 14px 18px; }
+.trow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding-top: 12px; border-top: .5px solid var(--line); }
+.tally { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tl { display: flex; align-items: center; min-width: 0; }
+.nums:empty { display: none; }
+.meter { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: baseline; gap: 2px; font-size: 13px; color: var(--muted); }
+.pill b { font-size: 17px; font-weight: 600; line-height: 1; color: var(--ink); }
+.pill i { font-size: 13px; font-style: normal; margin-right: 4px; }
+.pill em { font-style: normal; font-size: 11px; margin-left: 4px; }
+.pill.full b { color: var(--gold-deep); }
+.pill.full { color: var(--gold-deep); }
+.pill.over, .pill.over b { color: var(--warn); }
+.portions { flex: none; }
+.portions { padding: 3px; }
+.portions button { flex: none; padding: 5px 11px; font-size: 13px; }
+.note { font-size: 13px; color: var(--muted); margin-top: -4px; }
+.tray.over .note { color: var(--warn); }
+.chips { display: grid; gap: 4px; cursor: pointer; }
+.chips p { margin: 0; display: grid; grid-template-columns: minmax(30px, auto) minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.chips p b { font-weight: 400; white-space: nowrap; }
+.chips p b i { font-style: normal; font-size: 11px; color: var(--gold-deep); }
+.chips p span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chips p span em { font-style: normal; font-size: 11px; color: var(--gold-deep); margin-right: 4px; }
+.chips p.cur { color: var(--ink); }
+.chips p.cur b { font-weight: 600; }
+.chips p > u { display: none; }
+/* 곁들임(소스 등 코인 없는 것): 빠뜨리지 않게 앞에 오렌지 + */
+mark { background: none; color: inherit; }
+mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right: 2px; }
+.copy { padding: 12px 20px; border-radius: 999px; background: var(--btn); color: var(--btn-ink); font-size: 15px; font-weight: 600; text-align: center; white-space: nowrap; }
+.copy:disabled, .shr:disabled { opacity: .3; cursor: default; }
+.shr { width: 44px; height: 44px; border-radius: 50%; background: var(--well); display: grid; place-items: center; color: var(--ink); margin-right: -4px; }
+.shr svg { width: 16px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.sheet .shot { display: block; width: 100%; border-radius: 14px; box-shadow: 0 0 0 .5px var(--line); margin-top: 12px; -webkit-touch-callout: default; }
+.sheet .shotnote { font-size: 13px; color: var(--muted); margin: 12px 0 0; text-align: center; }
+#fallback { width: 100%; height: 120px; font: 13px var(--sans); }
+
+/* sheet */
+.sheet { position: fixed; inset: 0; z-index: 9; display: grid; align-items: end; }
+.sheet[hidden] { display: none; }
+.sheet .scrim { position: absolute; inset: 0; width: 100%; height: 100%; background: rgba(20, 18, 8, .4); }
+.sheet .panel { position: relative; background: var(--page); border-radius: 14px 14px 0 0; max-height: 76vh; overflow-y: auto; overscroll-behavior: contain; padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 8px; }
+.sheet .sh { display: flex; justify-content: space-between; align-items: center; }
+.sheet .sh b { font: 600 11px var(--mono); }
+.sheet .sh button { width: 30px; height: 30px; border-radius: 50%; background: var(--well); display: grid; place-items: center; color: var(--muted); }
+.sheet .sh svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; pointer-events: none; }
+/* 곁들임은 윗줄 메뉴에 딸린 것 — 구분선 없이 들여쓴다 */
+.sheet .rows li.tied::before { display: none; }
+.sheet .rows li.tied { min-height: 40px; margin-top: -4px; }
+.sheet .rows li.tied .sname { padding-left: 14px; padding-block: 8px 14px; color: var(--muted); }
+.sheet h3 { margin: 16px 0 8px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
+.sheet h3 span i { font-style: normal; font-size: 11px; color: var(--gold-deep); margin-left: 4px; }
+.sheet h3 em { font-style: normal; font-weight: 400; color: var(--muted); margin-left: 8px; }
+.sheet .rows li { grid-template-columns: minmax(0, 1fr) auto 36px; min-height: 52px; }
+
+.sheet .sname { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 12px 14px 0; font-size: 15px; font-weight: 400; }
+.sheet .sname span:first-child { overflow-wrap: anywhere; }
+.sheet .sname .coin i { width: 7px; height: 7px; }
+.sheet .del { width: 36px; height: 44px; color: var(--muted); font: 400 17px/1 var(--sans); text-align: center; }
+.sheet .none { color: var(--muted); font-size: 13px; padding: 16px 0; margin: 0; }
+.clr { font-size: 13px; font-weight: 400; color: var(--gold-deep); }
+.toast { position: fixed; left: 50%; bottom: calc(170px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 13px; z-index: 8; white-space: nowrap; }
+</style>
+
+<div class="top">
+<header class="band">
+  <div class="gutter">
+    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span id="stamp"></span></div>
+    <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
+  </div>
+</header>
+<nav class="rail" aria-label="카테고리"><div class="gutter"><div class="rs" id="rail"></div><span id="viewslot"></span></div></nav>
+</div>
+<main><div class="gutter"><div id="list"><div class="empty">메뉴를 불러오는 중입니다.</div></div></div></main>
+
+<div class="tray" id="tray" hidden>
+  <div class="gutter">
+    <div class="tally">
+      <div class="tl"><div class="nums" id="nums"></div><div class="meter" id="meter"></div></div>
+      <div class="portions sg" id="portions" aria-label="추가취식">
+        <button data-portion="1">기본</button><button data-portion="2">+1</button><button data-portion="3">+2</button>
+      </div>
+    </div>
+    <div class="note" id="note" hidden></div>
+    <div class="trow"><div class="chips" id="chips"></div><button class="shr" id="share" aria-label="이미지로 공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><button class="copy" id="copy">복사</button></div>
+    <textarea id="fallback" hidden aria-label="복사할 내용"></textarea>
+  </div>
+</div>
+<div class="sheet" id="sheet" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const PROJECT = "omigzdxdxywtjsfzimks";
+const MEALS = { "1": "아침", "3": "저녁" };
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
+  select restaurant_code r, restaurant_name rn, menu_dt d, meal m, course c, course_type ct, name n, coin, round(kcal) k, handmade hm, tag tg, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') u
+  from welstory.menu_item
+  where takeout and meal in ('1','3') and restaurant_code <> 'CAF05'
+    and menu_dt >= to_char(now() at time zone 'Asia/Seoul', 'YYYYMMDD')
+  order by menu_dt, meal, course, course_type, seq) t`;
+const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
+
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), noPick: false, view: "grid", edit: false, combos: [], updated: null };
+let docRef = null, saveTimer = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const keyOf = (d, m, r = S.rest) => `${r}|${d}-${m}`;
+const restName = (id) => S.rests.find((x) => x.id === id)?.name || id;
+const ymd = (d) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)));
+const dateLabel = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)} ${WD[ymd(d).getUTCDay()]}`;
+const todayYmd = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, "");
+
+// execute_sql 은 안내문 + <untrusted-data-…> 경계 안의 JSON 배열로 결과를 돌려준다
+function parsePayload(p, depth = 0) {
+  if (Array.isArray(p)) return p[0]?.j ?? p;
+  if (p && typeof p === "object") return typeof p.result === "string" ? parsePayload(p.result, depth + 1) : (p.j ?? []);
+  const s = String(p ?? "").trim();
+  const m = s.match(/<untrusted-data-[^>]*>\s*(\[[\s\S]*\])\s*<\/untrusted-data/);
+  if (m) return parsePayload(JSON.parse(m[1]), depth + 1);
+  if (depth < 3 && /^[\[{]/.test(s)) return parsePayload(JSON.parse(s), depth + 1);
+  throw new Error("unexpected result");
+}
+
+// ---------- items ----------
+const NOODLE = /라면|면$|면,|우동|짬뽕|짜장|컵누들|토핑|볶음면|국수/;
+const RICE = /햇반|밥|죽|김밥|덮밥|국$|국밥|해장국|시리얼|삼각|절편/;
+function catName(course, names) {
+  const c = course.replace(/^T\/O\s*/, "").trim();
+  if (c !== "컵푸드") return c;
+  const nd = names.filter((n) => NOODLE.test(n)).length, rc = names.filter((n) => RICE.test(n)).length;
+  if (nd >= names.length * .5) return "컵라면";
+  if (rc >= names.length * .5) return "밥·죽";
+  return "간식·요거트";
+}
+const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
+const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
+const cache = new Map();
+function itemsFor(d, m, rid = S.rest) {
+  const k = keyOf(d, m, rid);
+  if (cache.has(k)) return cache.get(k);
+  const groups = new Map();
+  for (const r of S.rows) {
+    if (r.d !== d || r.m !== m || r.r !== rid) continue;
+    if (r.coin == null && !/음료/.test(r.c) && /\d+\s*종\s*$/.test(r.n)) continue; // "○○ 10종" 같은 묶음 제목
+    const g = `${r.c}|${r.ct}`;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(r);
+  }
+  const seen = new Map();
+  for (const rows of groups.values()) {
+    const cat = /음료/.test(rows[0].c) ? "음료" : catName(rows[0].c, rows.map((r) => r.n));
+    for (const r of rows) if (!seen.has(r.n)) seen.set(r.n, { name: r.n, cat, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+  }
+  const list = [...seen.values()];
+  cache.set(k, list);
+  return list;
+}
+function freq() {
+  const f = {};
+  for (const p of Object.values(S.picks)) if (p.sent) for (const n of Object.keys(p.items || {})) f[n] = (f[n] || 0) + 1;
+  return f;
+}
+const portionsOf = (k) => { const v = S.portions[k]; return v === true ? 2 : (v || 1); };
+
+// ---------- budget: 1인분 = 4코인 + 음료 1, 4코인을 넘긴 만큼 음료 자리를 쓰고 그 음료는 지정 ----------
+function budget(items, sel, n) {
+  let coins = 0, drinks = 0, unknown = 0, pickIn = false;
+  for (const it of items) {
+    const q = sel[it.name] || 0;
+    if (!q) continue;
+    if (/pick/i.test(it.tag || "")) pickIn = true;
+    if (it.drink) drinks += q; else if (it.coin == null) unknown += q; else coins += it.coin * q;
+  }
+  const base = 4 * n, cap = pickIn ? base : 5 * n; // Pick(3코인)은 사이드 하나와 짝 — 5코인째(지정 음료)는 없다
+  const fixed = Math.min(n, Math.max(0, coins - base));
+  const drinkMax = n - fixed;
+  return { coins, drinks, unknown, pickIn, base, cap, fixed, drinkMax, over: coins > cap || drinks > drinkMax };
+}
+
+// ---------- persistence (this viewer only) ----------
+function save() {
+  if (!docRef) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const keys = Object.keys(S.picks).sort().slice(-180);
+    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
+    catch (e) { console.warn(e); }
+  }, 700);
+}
+async function initStore() {
+  try {
+    const db = await claude.use("db");
+    const user = await claude.use("user");
+    const id = user && (await user.id());
+    if (!db || !id) return;
+    docRef = db.doc(`data/users/${id}/state`);
+    const snap = await docRef.get();
+    if (snap.exists) {
+      // 스냅샷 데이터는 읽기 전용(frozen)이라 수정하려면 깊은 복사본이 필요하다
+      const v = JSON.parse(JSON.stringify(snap.data() || {}));
+      // 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
+      const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
+      S.fav = new Set(v.fav || []); S.picks = mig(v.picks); S.portions = mig(v.portions || v.extra);
+      if (v.rest) S.rest = v.rest;
+      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+      if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
+      if (S.rows.length) render();
+    }
+  } catch (e) { console.warn("store", e); }
+}
+
+// ---------- render ----------
+function render() {
+  if (!S.rests.some((x) => x.id === S.rest)) S.rest = S.rests[0]?.id;
+  $("rests").innerHTML = S.rests.map((x) => `<button data-rest="${x.id}" aria-pressed="${x.id === S.rest}">${esc(x.name)}</button>`).join("");
+  const dates = [...new Set(S.rows.filter((r) => r.r === S.rest).map((r) => r.d))];
+  if (!dates.length) return;
+  if (!dates.includes(S.date)) S.date = dates.includes(todayYmd()) ? todayYmd() : dates[0];
+  const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.r === S.rest && r.d === S.date && r.m === m));
+  if (!meals.includes(S.meal)) S.meal = defaultMeal(meals);
+  const k = keyOf(S.date, S.meal);
+  const all = itemsFor(S.date, S.meal);
+  const isPick = (it) => /pick/i.test(it.tag || "");
+  const hasPick = all.some(isPick);
+  const isHidden = (it) => S.hide.has(it.name) || S.hideCats.has(it.cat);
+  const items = S.edit ? all : all.filter((it) => !isHidden(it));
+  const sel = S.picks[k]?.items || {};
+  const f = freq();
+  const n = portionsOf(k);
+  // Pick 이 끼면 4코인(×인분)을 넘길 수 없다 — 넘치는 메뉴는 비활성으로 보여준다
+  const bud = budget(all, sel, portionsOf(k));
+  S.blocked = (it) => !S.edit && !sel[it.name] && !it.drink && it.coin != null && (bud.pickIn || isPick(it)) && bud.coins + it.coin > bud.base;
+
+  {
+    // 메뉴가 있는 날만 — 숫자(선택하면 채운 원) 옆에 요일
+    const L = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], today = todayYmd();
+    $("dates").innerHTML = dates.map((d) =>
+      `<button class="day${d === today ? " today" : ""}" data-date="${d}" aria-pressed="${d === S.date}"><span class="dn">${+d.slice(6, 8)}</span><span class="wl">${L[ymd(d).getUTCDay()]}</span></button>`).join("");
+  }
+  $("meals").innerHTML = meals.map((m) => {
+    const n = Object.values(S.picks[keyOf(S.date, m)]?.items || {}).reduce((a, q) => a + q, 0);
+    return `<button data-meal="${m}" aria-pressed="${m === S.meal}">${MEALS[m]}${n ? `<span class="cnt">${n}</span>` : ""}</button>`;
+  }).join("");
+
+  // categories
+  const cats = new Map();
+  const liked = items.filter((it) => S.fav.has(it.name) || f[it.name])
+    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
+  S.combos = S.edit ? [] : combos(all.filter((it) => !isHidden(it)), f, n);
+  if (liked.length || S.combos.length) cats.set("추천", liked);
+  const hand = items.filter((it) => it.hand);
+  if (hand.length) cats.set("수제", hand);
+  const byCat = new Map();
+  for (const it of items) { if (!byCat.has(it.cat)) byCat.set(it.cat, []); byCat.get(it.cat).push(it); }
+  [...byCat.keys()].sort((a, b) => rank(a) - rank(b)).forEach((c) => cats.set(c, byCat.get(c).sort((x, y) => (x.coin ?? 9) - (y.coin ?? 9))));
+  if (!cats.has(S.cat)) S.cat = cats.keys().next().value;
+
+  $("rail").innerHTML = [...cats].map(([c, list]) => {
+    const has = list.some((it) => sel[it.name]);
+    const off = S.edit && S.hideCats.has(c);
+    return `<button data-cat="${esc(c)}" aria-pressed="${c === S.cat}" class="${has ? "has" : ""}${off ? " off" : ""}">${c === "추천" ? `${heart(true)}추천` : esc(c)}<span class="n">${list.length}</span></button>`;
+  }).join("") + `<button class="editbtn" id="edit" aria-pressed="${S.edit}">${S.edit ? "완료" : "숨기기"}</button>`;
+
+  const list = cats.get(S.cat) || [];
+  let head = "";
+  if (S.edit) {
+    const special = S.cat === "추천" || S.cat === "수제";
+    head = `<div class="editbar"><p class="hint">탭하면 숨기고, 다시 탭하면 돌아와요.</p>${special ? "" :
+      `<button class="catoff" data-hidecat="${esc(S.cat)}">${S.hideCats.has(S.cat) ? `${esc(S.cat)} 다시 보이기` : `${esc(S.cat)} 전체 숨기기`}</button>`}</div>`;
+  } else if (S.cat === "추천") {
+    head = S.combos.length ? combosHtml(S.combos, n, sel) : "";
+    head += liked.length ? foldHtml(liked, sel, f) : `<p class="hint">${heart(false)} 를 눌러두면 조합이 더 잘 맞아요.</p>`;
+  } else if (S.cat === "수제") head = `<p class="hint">오늘 나온 수제 메뉴예요.</p>`;
+  const tabbed = S.cat !== "추천" && !S.edit;
+  const ICON = { grid: '<svg viewBox="0 0 14 14"><rect x="1" y="1" width="5" height="5" rx="1.2"/><rect x="8" y="1" width="5" height="5" rx="1.2"/><rect x="1" y="8" width="5" height="5" rx="1.2"/><rect x="8" y="8" width="5" height="5" rx="1.2"/></svg>',
+    list: '<svg viewBox="0 0 14 14"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>' };
+  const other = S.view === "list" ? "grid" : "list";
+  $("viewslot").innerHTML = tabbed ? `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>` : "";
+  const anyBlk = tabbed && (cats.get(S.cat) || []).some(S.blocked);
+  const blkHint = anyBlk ? `<p class="hint">${bud.pickIn ? "Pick을 담아서" : "Pick은 3코인이라"} 남은 코인에 맞는 메뉴만 고를 수 있어요</p>` : "";
+  const legend = blkHint;
+  if (S.cat === "추천" && !S.edit) { $("list").innerHTML = legend + head; renderTray(all, sel, n); $("stamp").textContent = S.updated ? `${S.updated} 갱신` : ""; return; }
+  $("list").innerHTML = list.length || head
+    ? `${legend}${head}${tabbed && S.view === "list" ? listBody(list, sel, f) : `<div class="grid">${gridBody(list, sel, f, isHidden)}</div>`}`
+    : `<div class="empty">이 끼니엔 테이크아웃이 없어요.</div>`;
+
+  renderTray(all, sel, n);
+  $("stamp").textContent = S.updated ? `${S.updated} 갱신` : "";
+}
+// 각 탭: 담은 적 있거나 ☆한 메뉴를 위로, 나머지는 '새로운 메뉴'로 나눠 보여준다
+function gridBody(list, sel, f, isHidden) {
+  const draw = (l) => l.map((it) => tile(it, sel[it.name] || 0, f[it.name] || 0, isHidden(it))).join("");
+  if (S.edit) return draw(list);
+  const known = list.filter((it) => S.fav.has(it.name) || f[it.name])
+    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
+  const fresh = list.filter((it) => !known.includes(it));
+  if (!known.length || !fresh.length) return draw(known.length ? known : fresh);
+  return `<p class="gh">담은 적 있는 메뉴</p>${draw(known)}<p class="gh">새로운 메뉴</p>${draw(fresh)}`;
+}
+// 목록 한 줄: 체크 원 · 이름 + 보조 줄(코인 · 분류 · kcal) · 수량 · 하트
+function rowHtml(it, q, plain) {
+  const nm = esc(it.name);
+  const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, tagText(it), it.kcal ? `${it.kcal} kcal` : ""].filter(Boolean).join(" · ");
+  const blk = S.blocked?.(it);
+  return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
+    <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
+      <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
+      <span class="rt"><span class="rname">${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}${esc(sub)}</span></span>
+    </button>
+    <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">+</button>` : ""}</span>
+    <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
+  </li>`;
+}
+function listBody(list, sel, f) {
+  const plain = S.cat !== "수제";
+  const group = (title, l) => l.length ? `${title ? `<p class="gh">${title}</p>` : ""}<ul class="rows">${l.map((it) => rowHtml(it, sel[it.name] || 0, plain)).join("")}</ul>` : "";
+  const known = list.filter((it) => S.fav.has(it.name) || f[it.name])
+    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
+  const fresh = list.filter((it) => !known.includes(it));
+  return !known.length || !fresh.length ? group("", known.length ? known : fresh)
+    : group("담은 적 있는 메뉴", known) + group("새로운 메뉴", fresh);
+}
+const rank = (c) => { const i = CAT_ORDER.indexOf(c); return i < 0 ? 50 : i; };
+
+// ---------- 조합 제안: ☆·보낸 적 있는 메뉴·오늘의 수제로 정확히 4코인(×인분)을 맞춘다 ----------
+function combos(items, f, n) {
+  const target = 4 * n, maxSize = 3 + n;
+  const score = (it) => (S.fav.has(it.name) ? 3 : 0) + Math.min(f[it.name] || 0, 5) * .8 + (it.hand ? 1.2 : 0);
+  const pool = items.filter((it) => !it.drink && it.coin >= 1 && it.coin <= target && score(it) > 0)
+    .map((it) => ({ it, s: score(it) })).sort((a, b) => b.s - a.s).slice(0, 16);
+  const found = [];
+  (function dfs(i, pick, sum) {
+    if (sum === target && pick.length) {
+      const cats = new Set(pick.map((p) => p.it.cat));
+      found.push({ items: pick.map((p) => p.it), score: pick.reduce((a, p) => a + p.s, 0) + cats.size * .6 - (pick.length - cats.size) * .8 });
+      return;
+    }
+    if (sum >= target || pick.length >= maxSize || found.length > 4000) return;
+    for (let j = i; j < pool.length; j++) if (sum + pool[j].it.coin <= target) dfs(j + 1, [...pick, pool[j]], sum + pool[j].it.coin);
+  })(0, [], 0);
+  found.sort((a, b) => b.score - a.score);
+  const out = [];
+  for (const c of found) {
+    const names = new Set(c.items.map((x) => x.name));
+    const similar = out.some((o) => o.items.filter((x) => names.has(x.name)).length >= Math.max(1, c.items.length - 1));
+    if (!similar) out.push(c);
+    if (out.length === 3) break;
+  }
+  const drinks = items.filter((it) => it.drink)
+    .map((it) => ({ it, s: (S.fav.has(it.name) ? 3 : 0) + (f[it.name] || 0) })).filter((d) => d.s > 0).sort((a, b) => b.s - a.s);
+  const drink = drinks[0]?.it || null;
+  return out.map((c) => ({ ...c, drink }));
+}
+// ☆·보낸 메뉴는 조합이 이미 쓰고 있으니 기본은 접어두고, 펼치면 한 줄짜리 목록으로 보여준다
+function foldHtml(list, sel, f) {
+  const rows = list.map((it) => rowHtml(it, sel[it.name] || 0, false)).join("");
+  return `<section class="fold">
+    <button class="fold-h" id="fold" aria-expanded="${!!S.foldOpen}"><span class="fold-t">Recent Favorites</span><span class="n">${list.length} ${S.foldOpen ? "−" : "+"}</span></button>
+    ${S.foldOpen ? `<ul class="rows">${rows}</ul>` : ""}
+  </section>`;
+}
+const comboOn = (c, sel) => { const need = {}; for (const it of c.items) need[it.name] = (need[it.name] || 0) + 1; return Object.entries(need).every(([nm, q]) => (sel[nm] || 0) >= q); };
+function combosHtml(list, n, sel = {}) {
+  return `<div class="combos">${list.map((c, i) => `
+    <button class="combo" data-combo="${i}" aria-pressed="${comboOn(c, sel)}">
+      <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
+      <span class="combo-b">
+        <span class="combo-h"><b>Combo ${i + 1}</b><span>${4 * n}코인${c.drink ? ` + 음료 ${n}` : ""}</span></span>
+        ${c.items.map((it) => `<span class="ci"><span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${"<i></i>".repeat(it.coin)}</span><span>${esc(it.name)}</span></span>`).join("")}
+        ${c.drink ? `<span class="ci"><span class="coin" aria-label="음료"><i class="o"></i></span><span>${esc(c.drink.name)}${n > 1 ? ` ×${n}` : ""}</span></span>` : ""}
+      </span>
+    </button>`).join("")}</div>`;
+}
+function defaultMeal(meals) {
+  const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
+  return meals.includes("3") && h >= 9 && h < 20 ? "3" : meals[0];
+}
+function tile(it, q, times, hidden) {
+  const n = esc(it.name);
+  if (S.edit) {
+    const dots = it.drink ? `<span class="coin" aria-label="음료"><i class="o"></i></span>` : it.coin ? `<span class="coin">${"<i></i>".repeat(it.coin)}</span>` : `<span class="coin"><span class="v side">곁들임</span></span>`;
+    return `<div class="tile${hidden ? " muted" : ""}">
+      <button class="add" data-hide="${n}" aria-pressed="${hidden}" aria-label="${n} ${hidden ? "다시 보이기" : "숨기기"}">${dots}<span class="name">${n}</span><span class="meta"><span>${hidden ? "숨김" : "보임"}</span></span></button>
+    </div>`;
+  }
+  // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
+  const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : ""].filter(Boolean).join(" · ");
+  const blk = S.blocked?.(it);
+  return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
+    <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
+      <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
+      <span class="name">${n}</span>
+      <span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span>${esc(sub)}</span></span>
+    </button>
+    <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
+    ${q ? `<span class="rq"><button data-sub="${n}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${n}" aria-label="하나 더">+</button></span>` : ""}
+  </div>`;
+}
+function renderTray(items, sel, n) {
+  const b = budget(items, sel, n);
+  $("tray").hidden = false;
+  $("tray").classList.toggle("over", b.over);
+  $("nums").innerHTML = "";
+  $("meter").setAttribute("aria-label", `${b.coins}/${b.base}코인, 음료 ${b.drinks}/${b.drinkMax}`);
+  document.querySelectorAll("[data-portion]").forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.portion === n)));
+
+  // 미터: 기본/+1/+2 와 같은 높이의 칩 두 개. 다 채우면 채운 칩, 넘치면 경고색
+  const st = (v, max, over) => over ? "over" : v === 0 ? "" : v >= max ? "full" : "part";
+  const coinCls = st(b.coins, b.base, b.coins > b.cap);
+  const drinkCls = st(b.drinks, b.drinkMax, b.drinks > b.drinkMax);
+  $("meter").innerHTML =
+    `<span class="pill ${coinCls}"><b>${b.coins}</b><i>/${b.base}</i>코인</span>` +
+    `<span class="pill ${drinkCls}"><b>${b.drinks}</b><i>/${b.drinkMax}</i>음료${b.fixed ? `<em>+지정 ${b.fixed}</em>` : ""}</span>`;
+
+  const notes = [];
+  if (b.coins > b.cap) notes.push(b.pickIn ? `Pick을 담으면 ${b.cap}코인까지예요` : `${b.cap}코인을 넘었습니다`);
+  else if (b.drinks > b.drinkMax) notes.push(`고를 수 있는 음료는 ${b.drinkMax}개입니다`);
+  else if (b.fixed) notes.push(`음료 ${b.fixed}개는 지정 음료로 나옵니다`);
+  const cnt = Object.values(sel).reduce((a, q) => a + q, 0);
+  const noteText = notes.join(" · ");
+  $("note").textContent = noteText;
+  $("note").hidden = !noteText;
+  // 선택한 날의 아침·저녁을 한눈에 — 지금 보는 끼니는 진하게
+  $("chips").innerHTML = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.d === S.date && r.m === m)).map((m) => {
+    // 식당이 달라도 같은 끼니에 담은 건 한 줄에 — 지금 식당이 아닌 건 식당 이름을 앞에 붙인다
+    const names = [];
+    for (const x of S.rests) {
+      const s = S.picks[keyOf(S.date, m, x.id)]?.items || {};
+      if (!Object.keys(s).length) continue;
+      const by = Object.fromEntries(itemsFor(S.date, m, x.id).map((it) => [it.name, it]));
+      // 코인이 없는 곁들임(소스·드레싱 등)은 빠뜨리기 쉬우니 형광펜처럼 칠한다
+      const part = [];
+      let prevCat = null;
+      for (const { name, q, it } of ordered(s, by)) {
+        const t = `${esc(name)}${q > 1 ? ` ×${q}` : ""}`;
+        if (isSide(it) && part.length && prevCat === it.cat) part[part.length - 1] += ` <mark>${t}</mark>`; // 쉼표 없이 앞 메뉴에 붙인다
+        else part.push(isSide(it) ? `<mark>${t}</mark>` : t);
+        prevCat = it?.cat ?? null;
+      }
+      if (x.id !== S.rest) part[0] = `<em>${esc(x.name)}</em> ${part[0]}`;
+      names.push(...part);
+    }
+    const mine = Object.keys(S.picks[keyOf(S.date, m)]?.items || {}).length;
+    const extra = portionsOf(keyOf(S.date, m)) > 1 ? ` <i>+${portionsOf(keyOf(S.date, m)) - 1}</i>` : "";
+    const clr = names.length ? "<u>›</u>" : "<span></span>";
+    return `<p class="${m === S.meal ? "cur" : ""}"><b>${MEALS[m]}${extra}</b><span>${names.length ? names.join(", ") : "아직 없음"}</span>${clr}</p>`;
+  }).join("");
+  renderSheet();
+  $("copy").disabled = $("share").disabled = !anyPicks(S.date);
+  $("copy").textContent = "복사";
+}
+// 담은 것을 진열대 순서로, 곁들임(소스 등)은 같은 분류의 메뉴 바로 뒤에 붙인다
+const isSide = (it) => it && !it.drink && it.coin == null;
+function ordered(sel, by) {
+  return Object.entries(sel).map(([name, q], i) => ({ name, q, it: by[name], i }))
+    .sort((a, b) => (rank(a.it?.cat) - rank(b.it?.cat)) || (isSide(a.it) - isSide(b.it)) || (a.i - b.i));
+}
+function renderSheet() {
+  const el = $("sheet");
+  if (!S.sheet) { el.hidden = true; el.innerHTML = ""; return; }
+  let body = "";
+  for (const m of Object.keys(MEALS)) for (const x of S.rests) {
+    const k = keyOf(S.date, m, x.id), s = S.picks[k]?.items || {};
+    if (!Object.keys(s).length) continue;
+    const by = Object.fromEntries(itemsFor(S.date, m, x.id).map((it) => [it.name, it]));
+    const extra = portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "";
+    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em></span><button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
+      ordered(s, by).map(({ name, q, it }, idx, arr) => {
+        const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
+        const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
+        const label = it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm;
+        return `<li class="${tied ? "tied" : ""}"><span class="sname"><span>${label}</span>${coin}</span>
+          <span class="rq"><button data-sub="${nm}" data-k="${esc(k)}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" data-k="${esc(k)}" aria-label="하나 더">+</button></span>
+          <button class="del" data-del="${nm}" data-k="${esc(k)}" aria-label="${nm} 빼기">×</button></li>`;
+      }).join("") + "</ul>";
+  }
+  const keep = el.querySelector(".panel")?.scrollTop || 0;
+  el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button>
+    <div class="panel" role="dialog" aria-label="담은 메뉴"><div class="grab"></div>
+    <div class="sh"><b>Today’s Meal</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>${body || `<p class="none">아직 담은 메뉴가 없어요.</p>`}</div>`;
+  el.hidden = false;
+  el.querySelector(".panel").scrollTop = keep;
+}
+const anyPicks = (d) => S.rests.some((x) => Object.keys(MEALS).some((m) => Object.keys(S.picks[keyOf(d, m, x.id)]?.items || {}).length));
+
+// ---------- message ----------
+function message(d) {
+  const out = [];
+  for (const m of Object.keys(MEALS)) for (const x of S.rests) {
+    const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
+    if (!Object.keys(sel).length) continue;
+    const n = portionsOf(k), items = itemsFor(d, m, x.id);
+    const by = Object.fromEntries(items.map((it) => [it.name, it]));
+    // 진열대 섹션 순서대로 묶는다 — 섹션 이름이 먼저, 그 섹션에서 집을 것들이 뒤에
+    const sections = new Map(), drink = [];
+    for (const [name, q] of Object.entries(sel)) {
+      const it = by[name]; if (!it) continue;
+      const label = `${name}${q > 1 ? ` ×${q}` : ""}`;
+      if (it.drink) { drink.push(label); continue; }
+      if (!sections.has(it.cat)) sections.set(it.cat, []);
+      sections.get(it.cat).push(label);
+    }
+    const b = budget(items, sel, n);
+    if (b.fixed) drink.push(b.fixed > 1 ? `지정 음료 ×${b.fixed}` : "지정 음료");
+    const lines = [`${m === "1" ? "🌅" : "🌙"} ${dateLabel(d)} ${MEALS[m]} · ${x.name}${n > 1 ? `  ➕ 추가취식 ${n - 1}회` : ""}`];
+    for (const c of [...sections.keys()].sort((a, b2) => rank(a) - rank(b2))) lines.push(`[${c}] ${sections.get(c).join(" / ")}`);
+    if (drink.length) lines.push(`🥤 ${drink.join(" / ")}`);
+    out.push(lines.join("\n"));
+  }
+  return out.join("\n\n");
+}
+// ---------- image card ----------
+// 카톡에 그대로 올릴 수 있는 한 장: 날짜 제목 → 끼니·식당별로 진열대 순서의 메뉴
+function cardBlocks(d) {
+  const out = [];
+  for (const m of Object.keys(MEALS)) for (const x of S.rests) {
+    const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
+    if (!Object.keys(sel).length) continue;
+    const n = portionsOf(k), items = itemsFor(d, m, x.id);
+    const by = Object.fromEntries(items.map((it) => [it.name, it]));
+    const rows = [];
+    for (const { name, q, it } of ordered(sel, by)) {
+      if (!it) continue;
+      const cat = it.drink ? "음료" : it.cat, text = name;
+      let row = rows[rows.length - 1];
+      if (!row || row.cat !== cat) rows.push(row = { cat, items: [] });
+      row.items.push({ text, q, side: isSide(it), coin: it.drink ? 0 : it.coin || 0, drink: !!it.drink, pick: /pick/i.test(it.tag || "") });
+    }
+    const b = budget(items, sel, n);
+    if (b.fixed) { let row = rows.find((r) => r.cat === "음료"); if (!row) rows.push(row = { cat: "음료", items: [] }); row.items.push({ text: "지정 음료", q: b.fixed, drink: true }); }
+    out.push({ title: MEALS[m], rest: x.name, extra: n - 1, rows, coins: b.coins });
+  }
+  return out;
+}
+function drawCard(d) {
+  const blocks = cardBlocks(d);
+  const W = 360, P = 24, LABEL = 76, SC = 3, FONT = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif';
+  const INK = "#1D1B14", MUTED = "rgba(29,27,20,.5)", LINE = "rgba(29,27,20,.1)", OLIVE = "#5B5121", ORANGE = "#ED6328";
+  const cv = document.createElement("canvas"), cx = cv.getContext("2d");
+  const font = (w, px) => { cx.font = `${w} ${px}px ${FONT}`; };
+  const wrap = (text, max) => { // 띄어쓰기에서 먼저 끊고, 한 낱말이 너무 길 때만 글자 단위로
+    const lines = []; let cur = "";
+    for (const word of text.split(/(?<= )/)) {
+      if (!cur || cx.measureText((cur + word).trimEnd()).width <= max) { cur += word; }
+      else { lines.push(cur.trimEnd()); cur = word; }
+      while (cx.measureText(cur.trimEnd()).width > max) { let k = cur.length - 1; while (k > 1 && cx.measureText(cur.slice(0, k)).width > max) k--; lines.push(cur.slice(0, k)); cur = cur.slice(k); }
+    }
+    if (cur.trim()) lines.push(cur.trimEnd()); return lines;
+  };
+  const used = { coin: false, pick: false, drink: false };
+  const QCOL = 0; // 코인 옆 '×n' 은 쓰지 않는다 — 수량은 이름 뒤 칩으로만
+  // 1) 배치 계산
+  const ops = []; let y = P + 34;
+  ops.push(() => { font(600, 34); cx.fillStyle = INK; cx.textBaseline = "alphabetic"; const day = String(+d.slice(6, 8)); cx.fillText(day, P, P + 30); const w = cx.measureText(day).width;
+    font(600, 17); cx.fillText(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][ymd(d).getUTCDay()], P + w + 8, P + 30);
+    font(600, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText("TODAY’S MEAL", W - P, P + 30); cx.textAlign = "left"; });
+  y += 20;
+  for (const b of blocks) {
+    const top = y;
+    ops.push(() => { cx.fillStyle = LINE; cx.fillRect(P, top, W - 2 * P, .5); font(600, 15); cx.fillStyle = INK; cx.fillText(b.title, P, top + 30); const w = cx.measureText(b.title).width;
+      font(400, 13); cx.fillStyle = MUTED; cx.fillText(b.rest, P + w + 8, top + 30);
+      if (b.extra > 0) { const t = `추가취식 +${b.extra}`; font(600, 11); const tw = cx.measureText(t).width; cx.fillStyle = OLIVE; cx.beginPath(); cx.roundRect(W - P - tw - 16, top + 15, tw + 16, 22, 11); cx.fill(); cx.fillStyle = "#fff"; cx.fillText(t, W - P - tw - 8, top + 30); } });
+    y += 48;
+    for (const r of b.rows) {
+      const ry = y; font(400, 15);
+      const lines = []; // 항목마다 줄바꿈, 곁들임은 앞에 +
+      for (const it of r.items) {
+        if (it.drink) used.drink = true; else if (it.pick) used.pick = true; else if (it.coin) used.coin = true;
+        const ls = wrap(it.text, W - 2 * P - LABEL - ((it.drink ? 1 : it.coin || 0) * 11 + 10) - QCOL - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0));
+        ls.forEach((ln, i) => lines.push({ ln, side: it.side, first: i === 0, last: i === ls.length - 1, it }));
+      }
+      ops.push(() => { font(400, 13); cx.fillStyle = MUTED; cx.fillText(r.cat, P, ry + 15);
+        lines.forEach((l, i) => { const ly = ry + 15 + i * 22; let x = P + LABEL;
+          if (l.side) { if (l.first) { font(600, 15); cx.fillStyle = ORANGE; cx.fillText("+", x, ly); } x += 12; }
+          font(400, 15); cx.fillStyle = l.side ? MUTED : INK; cx.fillText(l.ln, x, ly);
+          if (l.last && l.it.q > 1) { // 수량은 이름 뒤 작은 칩으로
+            const tx = x + cx.measureText(l.ln).width + 6, t = `×${l.it.q}`; font(600, 11); const tw = cx.measureText(t).width;
+            cx.fillStyle = "#F0E9C8"; cx.beginPath(); cx.roundRect(tx, ly - 14.5, tw + 12, 18, 9); cx.fill(); cx.fillStyle = OLIVE; cx.textBaseline = "middle"; cx.fillText(t, tx + 6, ly - 5); cx.textBaseline = "alphabetic"; }
+          if (l.first) { // 코인: 오른쪽 끝에 동그라미 (Pick 은 머스터드, 음료는 빈 원)
+            const n = l.it.drink ? 1 : l.it.coin, cy = ly - 5;
+            if (QCOL && l.it.q > 1 && n) { font(600, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText(`×${l.it.q}`, W - P, ly - 1.500); cx.textAlign = "left"; }
+            for (let k = 0; k < n; k++) { const dx = W - P - 4 - QCOL - (n - 1 - k) * 11; cx.beginPath(); cx.arc(dx, cy, 3.5, 0, Math.PI * 2);
+              if (l.it.drink) { cx.lineWidth = 1.3; cx.strokeStyle = OLIVE; cx.stroke(); } else { cx.fillStyle = l.it.pick ? "#BFA732" : OLIVE; cx.fill(); } }
+          } }); });
+      y += lines.length * 22 + 8;
+    }
+    y += 8;
+  }
+  // 범례: 이 이미지에 실제로 나온 동그라미만 설명
+  const legend = [used.coin && ["코인", OLIVE, false], used.pick && ["Pick", "#BFA732", false], used.drink && ["음료", OLIVE, true]].filter(Boolean);
+  if (legend.length) { const ly = y + 14; y += 30;
+    ops.push(() => { cx.fillStyle = LINE; cx.fillRect(P, ly - 14, W - 2 * P, .5); let x = P; font(400, 11);
+      for (const [t, col, hollow] of legend) { cx.beginPath(); cx.arc(x + 3.5, ly + 6, 3.5, 0, Math.PI * 2);
+        if (hollow) { cx.lineWidth = 1.3; cx.strokeStyle = col; cx.stroke(); } else { cx.fillStyle = col; cx.fill(); }
+        cx.fillStyle = MUTED; cx.fillText(t, x + 12, ly + 10); x += 12 + cx.measureText(t).width + 14; } }); }
+  const H = Math.ceil(y + P - 12);
+  // 2) 그리기
+  cv.width = W * SC; cv.height = H * SC; cx.scale(SC, SC);
+  cx.fillStyle = "#fff"; cx.fillRect(0, 0, W, H);
+  ops.forEach((f) => f());
+  return cv;
+}
+async function shareImage() {
+  if (!anyPicks(S.date)) return;
+  const cv = drawCard(S.date);
+  const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+  const markSent = () => { for (const x of S.rests) for (const m of Object.keys(MEALS)) { const p = S.picks[keyOf(S.date, m, x.id)]; if (p && Object.keys(p.items || {}).length) p.sent = true; } save(); };
+  let dl = null;
+  try { dl = await claude.use("downloads"); } catch (_) {}
+  if (dl && blob) {
+    try { await dl.save({ filename: `meal-${S.date.slice(4)}.png`, data: blob }); markSent(); render(); return; }
+    catch (e) { if (e?.code === "declined") return; if (e?.code === "rate_limited") { toast("잠시 뒤에 다시 눌러주세요"); return; } }
+  }
+  // 저장 창을 쓸 수 없으면 이미지를 띄워서 길게 눌러 공유·저장하게 한다
+  S.sheet = false; const el = $("sheet");
+  el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button><div class="panel" role="dialog" aria-label="이미지"><div class="grab"></div>
+    <div class="sh"><b>Today’s Meal</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+    <img class="shot" alt="담은 메뉴" src="${cv.toDataURL("image/png")}"><p class="shotnote">이미지를 길게 눌러 공유하거나 저장하세요</p></div>`;
+  el.hidden = false; markSent();
+}
+async function copy() {
+  const text = message(S.date);
+  if (!text) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (_) {}
+  const t = $("fallback");
+  if (!ok) { t.hidden = false; t.value = text; t.focus(); t.select(); } else t.hidden = true;
+  for (const x of S.rests) for (const m of Object.keys(MEALS)) { const p = S.picks[keyOf(S.date, m, x.id)]; if (p && Object.keys(p.items || {}).length) p.sent = true; }
+  save(); render();
+  toast(ok ? "복사했어요. 카톡에 붙여 넣으세요" : "위 글을 길게 눌러 복사해주세요");
+}
+function toast(t) { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2200); }
+
+// ---------- events ----------
+window.addEventListener("error", (e) => toast(`오류: ${e.message}`));
+window.addEventListener("unhandledrejection", (e) => toast(`오류: ${e.reason?.message || e.reason}`));
+// 탭 진단: 터치가 페이지까지 오는지, click 이 따라오는지 세어 상단에 표시한다
+const DIAG = { down: 0, up: 0, click: 0, handled: 0 };
+let pendingUp = null, lastHandled = 0;
+function diag() { const el = $("diag"); if (el) el.textContent = `터치 ${DIAG.down}·${DIAG.up} / 클릭 ${DIAG.click} / 처리 ${DIAG.handled}`; }
+function handle(e) {
+  const now = Date.now();
+  try { onTap(e); DIAG.handled++; } catch (err) { toast(`오류: ${err.message}`); console.error(err); }
+  diag();
+}
+// click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
+document.addEventListener("click", (e) => handle(e), true);
+function onTap(e) {
+  const b = e.target.closest("button");
+  if (!b) { if (e.target.closest("#chips")) { S.sheet = true; renderSheet(); } return; }
+  const k = b.dataset.k || keyOf(S.date, S.meal);
+  if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
+  if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
+  if (b.dataset.clear) { delete S.picks[b.dataset.clear]; save(); render(); return; }
+  if (b.dataset.del != null) { const p = S.picks[k]; if (p?.items) { delete p.items[b.dataset.del]; p.sent = false; } save(); render(); return; }
+  if (b.dataset.rest) { S.rest = b.dataset.rest; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
+  if (b.dataset.date) { S.date = b.dataset.date; S.cat = null; render(); scrollTo(0, 0); return; }
+  if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }
+  if (b.dataset.cat) { S.cat = b.dataset.cat; S.catTouched = true; render(); b.scrollIntoView({ inline: "center", block: "nearest" }); return; }
+  if (b.dataset.portion) { S.portions[k] = +b.dataset.portion; save(); render(); return; }
+  if (b.id === "edit") { S.edit = !S.edit; render(); return; }
+  if (b.id === "fold") { S.foldOpen = !S.foldOpen; render(); return; }
+  if (b.dataset.hide != null) { const n = b.dataset.hide; S.hide.has(n) ? S.hide.delete(n) : S.hide.add(n); save(); render(); return; }
+  if (b.dataset.hidecat != null) { const c = b.dataset.hidecat; S.hideCats.has(c) ? S.hideCats.delete(c) : S.hideCats.add(c); save(); render(); return; }
+  if (b.dataset.combo != null) {
+    const c = S.combos[+b.dataset.combo]; if (!c) return;
+    const items = {};
+    for (const it of c.items) items[it.name] = (items[it.name] || 0) + 1;
+    if (c.drink) items[c.drink.name] = portionsOf(k);
+    if (comboOn(c, S.picks[k]?.items || {})) delete S.picks[k]; // 다시 누르면 비운다
+    else S.picks[k] = { items, sent: false };
+    save(); render(); return;
+  }
+  if (b.id === "copy") { copy(); return; }
+  if (b.id === "share") { shareImage(); return; }
+  if (b.id === "clear") { delete S.picks[k]; save(); render(); return; }
+  if (b.id === "reload") { load(true); return; }
+  if (b.dataset.star != null) { const n = b.dataset.star; S.fav.has(n) ? S.fav.delete(n) : S.fav.add(n); save(); render(); return; }
+  if (b.dataset.tog != null) { // 목록의 체크 원: 누르면 담고, 다시 누르면 뺀다
+    const p = S.picks[k] || (S.picks[k] = { items: {} });
+    if (!p.items || typeof p.items !== "object") p.items = {};
+    const n = b.dataset.tog;
+    if (p.items[n]) delete p.items[n]; else p.items[n] = 1;
+    p.sent = false; save(); render(); return;
+  }
+  if (b.dataset.add != null || b.dataset.sub != null) {
+    const p = S.picks[k] || (S.picks[k] = { items: {} });
+    if (!p.items || typeof p.items !== "object") p.items = {};
+    const n = b.dataset.add ?? b.dataset.sub;
+    p.items[n] = Math.max(0, (p.items[n] || 0) + (b.dataset.add != null ? 1 : -1));
+    if (!p.items[n]) delete p.items[n];
+    p.sent = false;
+    save(); render();
+  }
+}
+
+// ---------- load ----------
+async function load(refresh = false) {
+  const mcp = await claude.use("mcp");
+  if (!mcp) { showState("열쇠가 없어 메뉴를 불러올 수 없어요."); return; }
+  try {
+    const res = await mcp.callTool("Supabase", "execute_sql", { project_id: PROJECT, query: QUERY },
+      { cache: { staleTime: 10 * 60e3, gcTime: 2 * 86400e3, ...(refresh ? { refresh: true } : {}) } });
+    S.rows = parsePayload(res.payload);
+    const seen = new Map();
+    for (const r of S.rows) if (!seen.has(r.r)) seen.set(r.r, r.rn || r.r);
+    S.rests = [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => (b.id === "REST000007") - (a.id === "REST000007"));
+    cache.clear();
+    const u = S.rows.reduce((a, r) => (r.u > a ? r.u : a), "");
+    if (u) {
+      const t = new Date(new Date(u).getTime() + 9 * 3600e3);
+      const hm = `${String(t.getUTCHours()).padStart(2, "0")}:${String(t.getUTCMinutes()).padStart(2, "0")}`;
+      const same = t.toISOString().slice(0, 10).replace(/-/g, "") === todayYmd();
+      S.updated = same ? hm : `${t.getUTCMonth() + 1}/${t.getUTCDate()} ${hm}`;
+    } else S.updated = null;
+    if (!S.rows.length) { showState("저장된 메뉴가 없습니다. 메뉴 갱신이 아직 돌지 않았을 수 있습니다.", true); return; }
+    render();
+  } catch (e) {
+    const code = e?.code;
+    const msg = {
+      server_not_connected: "Supabase 커넥터가 연결되어 있지 않습니다. claude.ai 설정의 커넥터에서 Supabase를 추가해주세요.",
+      needs_reauth: "Supabase 연결이 만료되었습니다. claude.ai 설정의 커넥터에서 다시 연결해주세요.",
+      not_in_manifest: "이 페이지의 Supabase 접근이 꺼져 있습니다. 페이지 권한에서 Supabase를 허용해주세요.",
+      approval_required: "메뉴를 읽으려면 Supabase 접근 승인이 필요합니다.",
+      selection_required: "Supabase 커넥터가 여러 개입니다. 사용할 것을 골라주세요.",
+    }[code] || `메뉴를 불러오지 못했습니다 (${code || "오류"}).`;
+    showState(msg, code !== "server_not_connected" && code !== "needs_reauth");
+  }
+}
+function showState(text, retry) {
+  $("list").innerHTML = `<div class="empty"><span>${esc(text)}</span>${retry ? `<button id="reload">다시 불러오기</button>` : ""}</div>`;
+}
+
+load();
+initStore();
+</script>
+
+</body></html>

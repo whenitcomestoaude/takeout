@@ -841,15 +841,18 @@ function drawCard(d) {
     y += h + 14; }
   y += 20;
   blocks.forEach((b, bi) => {
-    const top = y, or = !!b.join;
-    ops.push(() => {
-      if (or) { font(600, 11); const t = b.join, tw = cx.measureText(t).width, mid = W / 2; cx.fillStyle = LINE; cx.fillRect(P, top, mid - tw / 2 - 10 - P, .5); cx.fillRect(mid + tw / 2 + 10, top, W - P - mid - tw / 2 - 10, .5); cx.fillStyle = MUTED; cx.fillText(t, mid - tw / 2, top + 4); }
-      else { cx.fillStyle = LINE; cx.fillRect(P, top, W - 2 * P, .5); }
-      font(600, 15); cx.fillStyle = INK; cx.fillText(b.title, P, top + 30); let x = P + cx.measureText(b.title).width + 8;
-      font(400, 13); cx.fillStyle = MUTED; cx.fillText(b.rest, x, top + 30); x += cx.measureText(b.rest).width + 8;
-      if (b.rank) pill(`${b.rank}순위`, x, top + 25, b.rank === 1 ? OLIVE : "rgba(29,27,20,.08)", b.rank === 1 ? "#fff" : INK);
-      if (b.extra > 0) pill(`추가취식 +${b.extra}`, W - P, top + 25, SOFT, OLIVE, true); });
-    y += 50;
+    // 끼니가 바뀌면 굵은 선과 큰 제목으로 끊고, 그 아래 식당별 묶음을 둔다
+    if (!b.join) { const top = y + (bi ? 14 : 0);
+      ops.push(() => { cx.fillStyle = INK; cx.fillRect(P, top, W - 2 * P, 1.5); font(600, 22); cx.fillText(b.title, P, top + 36); });
+      y = top + 66; }
+    else { const top = y + 4;
+      ops.push(() => { font(600, 11); const t = b.join, tw = cx.measureText(t).width, mid = W / 2; cx.fillStyle = LINE; cx.fillRect(P, top, mid - tw / 2 - 10 - P, .5); cx.fillRect(mid + tw / 2 + 10, top, W - P - mid - tw / 2 - 10, .5); cx.fillStyle = MUTED; cx.fillText(t, mid - tw / 2, top + 4); });
+      y = top + 28; }
+    const hy = y;
+    ops.push(() => { font(600, 13); cx.fillStyle = INK; cx.fillText(b.rest, P, hy + 4); const x = P + cx.measureText(b.rest).width + 8;
+      if (b.rank) pill(`${b.rank}순위`, x, hy - 1, b.rank === 1 ? OLIVE : "rgba(29,27,20,.08)", b.rank === 1 ? "#fff" : INK);
+      if (b.extra > 0) pill(`추가취식 +${b.extra}`, W - P, hy - 1, SOFT, OLIVE, true); });
+    y += 26;
     for (const [ii, it] of b.rows.entries()) {
       const ry = y; if (it.drink) used.drink = true; else if (it.pick) used.pick = true; else if (it.coin) used.coin = true;
       font(600, 10); const tagW = it.tag ? cx.measureText(it.tag).width + 12 + 8 : 0; font(400, 15);

@@ -311,6 +311,11 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .sheet .sname span:first-child { overflow-wrap: anywhere; }
 .sheet .sname .coin i { width: 7px; height: 7px; }
 .sheet .del { width: 36px; height: 44px; color: var(--muted); font: 400 17px/1 var(--sans); text-align: center; }
+.sheet .memo { width: 100%; margin-top: 12px; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 15px var(--sans); }
+.sheet .memo::placeholder { color: var(--muted); }
+.sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
+.sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
+.sheet .or { margin: 14px 0 -6px; text-align: center; font-size: 11px; color: var(--muted); }
 .sheet .none { color: var(--muted); font-size: 13px; padding: 16px 0; margin: 0; }
 .clr { font-size: 13px; font-weight: 400; color: var(--gold-deep); }
 .toast { position: fixed; left: 50%; bottom: calc(170px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 13px; z-index: 8; white-space: nowrap; }
@@ -355,7 +360,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, memo: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -433,12 +438,20 @@ function budget(items, sel, n) {
 }
 
 // ---------- persistence (this viewer only) ----------
+// 지난 날짜의 순위·메모는 버린다
+const pruned = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k, v]) => v && k.slice(0, 8) >= todayYmd()));
+// 그 끼니에 담은 식당들 — 1순위로 고른 곳이 먼저
+function pickedRests(d, m) {
+  const l = S.rests.filter((x) => Object.keys(S.picks[keyOf(d, m, x.id)]?.items || {}).length);
+  const first = S.rank[`${d}-${m}`];
+  return l.sort((a, b) => (b.id === first) - (a.id === first));
+}
 function save() {
   if (!docRef) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     const keys = Object.keys(S.picks).sort().slice(-180);
-    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
+    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
     catch (e) { console.warn(e); }
   }, 700);
 }
@@ -457,7 +470,7 @@ async function initStore() {
       const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
       S.fav = new Set(v.fav || []); S.picks = mig(v.picks); S.portions = mig(v.portions || v.extra);
       if (v.rest) S.rest = v.rest;
-      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.rank = v.rank || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
       if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
       if (S.rows.length) render();
     }
@@ -716,12 +729,14 @@ function renderSheet() {
   const el = $("sheet");
   if (!S.sheet) { el.hidden = true; el.innerHTML = ""; return; }
   let body = "";
-  for (const m of Object.keys(MEALS)) for (const x of S.rests) {
+  for (const m of Object.keys(MEALS)) pickedRests(S.date, m).forEach((x, ri, arr) => {
     const k = keyOf(S.date, m, x.id), s = S.picks[k]?.items || {};
-    if (!Object.keys(s).length) continue;
     const by = Object.fromEntries(itemsFor(S.date, m, x.id).map((it) => [it.name, it]));
     const extra = portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "";
-    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em></span><button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
+    // 한 끼니에 두 곳을 담았으면 둘 중 하나라는 뜻 — 순위를 눌러 바꾼다
+    const rk = arr.length > 1 ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${S.date}-${m}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
+    if (ri > 0) body += `<p class="or">또는</p>`;
+    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span><button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
@@ -730,7 +745,8 @@ function renderSheet() {
           <span class="rq"><button data-sub="${nm}" data-k="${esc(k)}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" data-k="${esc(k)}" aria-label="하나 더">+</button></span>
           <button class="del" data-del="${nm}" data-k="${esc(k)}" aria-label="${nm} 빼기">×</button></li>`;
       }).join("") + "</ul>";
-  }
+  });
+  if (body) body = `<input class="memo" id="memo" maxlength="60" placeholder="메모 (예: 품절이면 2순위로)" value="${esc(S.memo[S.date] || "")}">` + body;
   const keep = el.querySelector(".panel")?.scrollTop || 0;
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button>
     <div class="panel" role="dialog" aria-label="담은 메뉴"><div class="grab"></div>
@@ -743,9 +759,10 @@ const anyPicks = (d) => S.rests.some((x) => Object.keys(MEALS).some((m) => Objec
 // ---------- message ----------
 function message(d) {
   const out = [];
-  for (const m of Object.keys(MEALS)) for (const x of S.rests) {
+  if ((S.memo[d] || "").trim()) out.push(`📝 ${S.memo[d].trim()}`);
+  for (const m of Object.keys(MEALS)) for (const [ri, x] of pickedRests(d, m).entries()) {
     const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
-    if (!Object.keys(sel).length) continue;
+    const rk = pickedRests(d, m).length > 1 ? ` (${ri + 1}순위)` : "";
     const n = portionsOf(k), items = itemsFor(d, m, x.id);
     const by = Object.fromEntries(items.map((it) => [it.name, it]));
     // 진열대 섹션 순서대로 묶는다 — 섹션 이름이 먼저, 그 섹션에서 집을 것들이 뒤에
@@ -759,7 +776,7 @@ function message(d) {
     }
     const b = budget(items, sel, n);
     if (b.fixed) drink.push(b.fixed > 1 ? `지정 음료 ×${b.fixed}` : "지정 음료");
-    const lines = [`${m === "1" ? "🌅" : "🌙"} ${dateLabel(d)} ${MEALS[m]} · ${x.name}${n > 1 ? `  ➕ 추가취식 ${n - 1}회` : ""}`];
+    const lines = [`${m === "1" ? "🌅" : "🌙"} ${dateLabel(d)} ${MEALS[m]} · ${x.name}${rk}${n > 1 ? `  ➕ 추가취식 ${n - 1}회` : ""}`];
     for (const c of [...sections.keys()].sort((a, b2) => rank(a) - rank(b2))) lines.push(`[${c}] ${sections.get(c).join(" / ")}`);
     if (drink.length) lines.push(`🥤 ${drink.join(" / ")}`);
     out.push(lines.join("\n"));
@@ -770,29 +787,27 @@ function message(d) {
 // 카톡에 그대로 올릴 수 있는 한 장: 날짜 제목 → 끼니·식당별로 진열대 순서의 메뉴
 function cardBlocks(d) {
   const out = [];
-  for (const m of Object.keys(MEALS)) for (const x of S.rests) {
+  for (const m of Object.keys(MEALS)) pickedRests(d, m).forEach((x, ri, arr) => {
     const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
-    if (!Object.keys(sel).length) continue;
     const n = portionsOf(k), items = itemsFor(d, m, x.id);
     const by = Object.fromEntries(items.map((it) => [it.name, it]));
     const rows = [];
     for (const { name, q, it } of ordered(sel, by)) {
       if (!it) continue;
-      const cat = it.drink ? "음료" : it.cat, text = name;
-      let row = rows[rows.length - 1];
-      if (!row || row.cat !== cat) rows.push(row = { cat, items: [] });
-      row.items.push({ text, q, side: isSide(it), coin: it.drink ? 0 : it.coin || 0, drink: !!it.drink, pick: /pick/i.test(it.tag || "") });
+      // 현장 구분(Deli · Side · Pick)만 남긴다 — 메뉴 분류는 내가 짐작한 것이라 뺀다
+      const tag = /pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "";
+      rows.push({ text: name, q, side: isSide(it), coin: it.drink ? 0 : it.coin || 0, drink: !!it.drink, pick: tag === "Pick", tag });
     }
     const b = budget(items, sel, n);
-    if (b.fixed) { let row = rows.find((r) => r.cat === "음료"); if (!row) rows.push(row = { cat: "음료", items: [] }); row.items.push({ text: "지정 음료", q: b.fixed, drink: true }); }
-    out.push({ title: MEALS[m], rest: x.name, extra: n - 1, rows, coins: b.coins });
-  }
+    if (b.fixed) rows.push({ text: "지정 음료", q: b.fixed, drink: true });
+    out.push({ title: MEALS[m], rest: x.name, extra: n - 1, rows, rank: arr.length > 1 ? ri + 1 : 0 });
+  });
   return out;
 }
 function drawCard(d) {
-  const blocks = cardBlocks(d);
-  const W = 360, P = 24, LABEL = 76, SC = 3, FONT = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif';
-  const INK = "#1D1B14", MUTED = "rgba(29,27,20,.5)", LINE = "rgba(29,27,20,.1)", OLIVE = "#5B5121", ORANGE = "#ED6328";
+  const blocks = cardBlocks(d), memo = (S.memo[d] || "").trim();
+  const W = 360, P = 24, SC = 3, FONT = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif';
+  const INK = "#1D1B14", MUTED = "rgba(29,27,20,.5)", LINE = "rgba(29,27,20,.1)", OLIVE = "#5B5121", ORANGE = "#ED6328", MUSTARD = "#BFA732", SOFT = "#F0E9C8";
   const cv = document.createElement("canvas"), cx = cv.getContext("2d");
   const font = (w, px) => { cx.font = `${w} ${px}px ${FONT}`; };
   const wrap = (text, max) => { // 띄어쓰기에서 먼저 끊고, 한 낱말이 너무 길 때만 글자 단위로
@@ -805,46 +820,49 @@ function drawCard(d) {
     if (cur.trim()) lines.push(cur.trimEnd()); return lines;
   };
   const used = { coin: false, pick: false, drink: false };
-  const QCOL = 0; // 코인 옆 '×n' 은 쓰지 않는다 — 수량은 이름 뒤 칩으로만
+  const pill = (t, x, yMid, bg, fg, alignRight) => { font(600, 11); const tw = cx.measureText(t).width, w = tw + 16, x0 = alignRight ? x - w : x;
+    cx.fillStyle = bg; cx.beginPath(); cx.roundRect(x0, yMid - 11, w, 22, 11); cx.fill(); cx.fillStyle = fg; cx.textBaseline = "middle"; cx.fillText(t, x0 + 8, yMid + .5); cx.textBaseline = "alphabetic"; return w; };
   // 1) 배치 계산
   const ops = []; let y = P + 34;
   ops.push(() => { font(600, 34); cx.fillStyle = INK; cx.textBaseline = "alphabetic"; const day = String(+d.slice(6, 8)); cx.fillText(day, P, P + 30); const w = cx.measureText(day).width;
     font(600, 17); cx.fillText(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][ymd(d).getUTCDay()], P + w + 8, P + 30);
     font(600, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText("TODAY’S MEAL", W - P, P + 30); cx.textAlign = "left"; });
+  if (memo) { font(400, 15); const ls = wrap(memo, W - 2 * P - 28), my = y + 14, h = ls.length * 22 + 20;
+    ops.push(() => { cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(P, my, W - 2 * P, h, 12); cx.fill(); font(400, 15); cx.fillStyle = INK; ls.forEach((ln, i) => cx.fillText(ln, P + 14, my + 26 + i * 22)); });
+    y += h + 14; }
   y += 20;
-  for (const b of blocks) {
-    const top = y;
-    ops.push(() => { cx.fillStyle = LINE; cx.fillRect(P, top, W - 2 * P, .5); font(600, 15); cx.fillStyle = INK; cx.fillText(b.title, P, top + 30); const w = cx.measureText(b.title).width;
-      font(400, 13); cx.fillStyle = MUTED; cx.fillText(b.rest, P + w + 8, top + 30);
-      if (b.extra > 0) { const t = `추가취식 +${b.extra}`; font(600, 11); const tw = cx.measureText(t).width; cx.fillStyle = OLIVE; cx.beginPath(); cx.roundRect(W - P - tw - 16, top + 15, tw + 16, 22, 11); cx.fill(); cx.fillStyle = "#fff"; cx.fillText(t, W - P - tw - 8, top + 30); } });
-    y += 48;
-    for (const r of b.rows) {
-      const ry = y; font(400, 15);
-      const lines = []; // 항목마다 줄바꿈, 곁들임은 앞에 +
-      for (const it of r.items) {
-        if (it.drink) used.drink = true; else if (it.pick) used.pick = true; else if (it.coin) used.coin = true;
-        const ls = wrap(it.text, W - 2 * P - LABEL - ((it.drink ? 1 : it.coin || 0) * 11 + 10) - QCOL - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0));
-        ls.forEach((ln, i) => lines.push({ ln, side: it.side, first: i === 0, last: i === ls.length - 1, it }));
-      }
-      ops.push(() => { font(400, 13); cx.fillStyle = MUTED; cx.fillText(r.cat, P, ry + 15);
-        lines.forEach((l, i) => { const ly = ry + 15 + i * 22; let x = P + LABEL;
-          if (l.side) { if (l.first) { font(600, 15); cx.fillStyle = ORANGE; cx.fillText("+", x, ly); } x += 12; }
-          font(400, 15); cx.fillStyle = l.side ? MUTED : INK; cx.fillText(l.ln, x, ly);
-          if (l.last && l.it.q > 1) { // 수량은 이름 뒤 작은 칩으로
-            const tx = x + cx.measureText(l.ln).width + 6, t = `×${l.it.q}`; font(600, 11); const tw = cx.measureText(t).width;
-            cx.fillStyle = "#F0E9C8"; cx.beginPath(); cx.roundRect(tx, ly - 14.5, tw + 12, 18, 9); cx.fill(); cx.fillStyle = OLIVE; cx.textBaseline = "middle"; cx.fillText(t, tx + 6, ly - 5); cx.textBaseline = "alphabetic"; }
-          if (l.first) { // 코인: 오른쪽 끝에 동그라미 (Pick 은 머스터드, 음료는 빈 원)
-            const n = l.it.drink ? 1 : l.it.coin, cy = ly - 5;
-            if (QCOL && l.it.q > 1 && n) { font(600, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText(`×${l.it.q}`, W - P, ly - 1.500); cx.textAlign = "left"; }
-            for (let k = 0; k < n; k++) { const dx = W - P - 4 - QCOL - (n - 1 - k) * 11; cx.beginPath(); cx.arc(dx, cy, 3.5, 0, Math.PI * 2);
-              if (l.it.drink) { cx.lineWidth = 1.3; cx.strokeStyle = OLIVE; cx.stroke(); } else { cx.fillStyle = l.it.pick ? "#BFA732" : OLIVE; cx.fill(); } }
-          } }); });
-      y += lines.length * 22 + 8;
+  blocks.forEach((b, bi) => {
+    const top = y, or = b.rank > 1 && blocks[bi - 1]?.title === b.title;
+    ops.push(() => {
+      if (or) { font(600, 11); const t = "또는", tw = cx.measureText(t).width, mid = W / 2; cx.fillStyle = LINE; cx.fillRect(P, top, mid - tw / 2 - 10 - P, .5); cx.fillRect(mid + tw / 2 + 10, top, W - P - mid - tw / 2 - 10, .5); cx.fillStyle = MUTED; cx.fillText(t, mid - tw / 2, top + 4); }
+      else { cx.fillStyle = LINE; cx.fillRect(P, top, W - 2 * P, .5); }
+      font(600, 15); cx.fillStyle = INK; cx.fillText(b.title, P, top + 30); let x = P + cx.measureText(b.title).width + 8;
+      font(400, 13); cx.fillStyle = MUTED; cx.fillText(b.rest, x, top + 30); x += cx.measureText(b.rest).width + 8;
+      if (b.rank) pill(`${b.rank}순위`, x, top + 25, b.rank === 1 ? OLIVE : "rgba(29,27,20,.08)", b.rank === 1 ? "#fff" : INK);
+      if (b.extra > 0) pill(`추가취식 +${b.extra}`, W - P, top + 25, SOFT, OLIVE, true); });
+    y += 50;
+    for (const [ii, it] of b.rows.entries()) {
+      const ry = y; if (it.drink) used.drink = true; else if (it.pick) used.pick = true; else if (it.coin) used.coin = true;
+      font(400, 11); const tagW = it.tag ? cx.measureText(it.tag).width + 8 : 0; font(400, 15);
+      const right = (it.drink ? 1 : it.coin) * 11 + 10 + tagW;
+      const ls = wrap(it.text, W - 2 * P - right - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0));
+      ops.push(() => { ls.forEach((ln, i) => { const ly = ry + 15 + i * 22; let x = P;
+          if (it.side) { if (i === 0) { font(600, 15); cx.fillStyle = ORANGE; cx.fillText("+", x, ly); } x += 12; }
+          font(400, 15); cx.fillStyle = it.side ? MUTED : INK; cx.fillText(ln, x, ly);
+          if (i === ls.length - 1 && it.q > 1) { // 수량은 이름 뒤 작은 칩으로
+            const tx = x + cx.measureText(ln).width + 6, t = `×${it.q}`; font(600, 11); const tw = cx.measureText(t).width;
+            cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(tx, ly - 14.5, tw + 12, 18, 9); cx.fill(); cx.fillStyle = OLIVE; cx.textBaseline = "middle"; cx.fillText(t, tx + 6, ly - 5); cx.textBaseline = "alphabetic"; } });
+        // 오른쪽 끝: Deli · Side · Pick 글자 + 코인 동그라미 (Pick 은 머스터드, 음료는 빈 원)
+        const n = it.drink ? 1 : it.coin, cy = ry + 10;
+        for (let k = 0; k < n; k++) { const dx = W - P - 4 - (n - 1 - k) * 11; cx.beginPath(); cx.arc(dx, cy, 3.5, 0, Math.PI * 2);
+          if (it.drink) { cx.lineWidth = 1.3; cx.strokeStyle = OLIVE; cx.stroke(); } else { cx.fillStyle = it.pick ? MUSTARD : OLIVE; cx.fill(); } }
+        if (it.tag) { font(400, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText(it.tag, W - P - n * 11 - 6, ry + 14); cx.textAlign = "left"; } });
+      y += ls.length * 22 + (b.rows[ii + 1]?.side ? 0 : 8); // 곁들임은 윗줄에 바짝 붙인다
     }
-    y += 8;
-  }
+    y += 10;
+  });
   // 범례: 이 이미지에 실제로 나온 동그라미만 설명
-  const legend = [used.coin && ["코인", OLIVE, false], used.pick && ["Pick", "#BFA732", false], used.drink && ["음료", OLIVE, true]].filter(Boolean);
+  const legend = [used.coin && ["코인", OLIVE, false], used.pick && ["Pick", MUSTARD, false], used.drink && ["음료", OLIVE, true]].filter(Boolean);
   if (legend.length) { const ly = y + 14; y += 30;
     ops.push(() => { cx.fillStyle = LINE; cx.fillRect(P, ly - 14, W - 2 * P, .5); let x = P; font(400, 11);
       for (const [t, col, hollow] of legend) { cx.beginPath(); cx.arc(x + 3.5, ly + 6, 3.5, 0, Math.PI * 2);
@@ -902,12 +920,19 @@ function handle(e) {
 }
 // click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
 document.addEventListener("click", (e) => handle(e), true);
+// 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
+document.addEventListener("input", (e) => { if (e.target.id === "memo") { S.memo[S.date] = e.target.value; save(); } });
 function onTap(e) {
   const b = e.target.closest("button");
   if (!b) { if (e.target.closest("#chips")) { S.sheet = true; renderSheet(); } return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
+  if (b.dataset.rank) { // 순위 칩: 1순위를 누르면 다른 곳이 1순위로, 2순위를 누르면 그곳이 1순위로
+    const key = b.dataset.rank, other = pickedRests(S.date, key.slice(9)).find((x) => x.id !== b.dataset.rid);
+    S.rank[key] = b.classList.contains("first") && other ? other.id : b.dataset.rid;
+    save(); render(); return;
+  }
   if (b.dataset.clear) { delete S.picks[b.dataset.clear]; save(); render(); return; }
   if (b.dataset.del != null) { const p = S.picks[k]; if (p?.items) { delete p.items[b.dataset.del]; p.sent = false; } save(); render(); return; }
   if (b.dataset.rest) { S.rest = b.dataset.rest; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }

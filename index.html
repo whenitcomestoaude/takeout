@@ -315,7 +315,8 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .sheet .memo::placeholder { color: var(--muted); }
 .sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
 .sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
-.sheet .or { margin: 14px 0 -6px; text-align: center; font-size: 11px; color: var(--muted); }
+.sheet .join { display: flex; justify-content: center; margin: 16px 0 -4px; }
+.sheet .join .sg button { padding: 5px 12px; }
 .sheet .none { color: var(--muted); font-size: 13px; padding: 16px 0; margin: 0; }
 .clr { font-size: 13px; font-weight: 400; color: var(--gold-deep); }
 .toast { position: fixed; left: 50%; bottom: calc(170px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 13px; z-index: 8; white-space: nowrap; }
@@ -360,7 +361,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, memo: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, memo: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -446,12 +447,15 @@ function pickedRests(d, m) {
   const first = S.rank[`${d}-${m}`];
   return l.sort((a, b) => (b.id === first) - (a.id === first));
 }
+// 한 끼니에 두 곳을 담았을 때의 관계: or(둘 중 하나, 기본) · rank(순위) · and(둘 다)
+const modeOf = (d, m) => S.mode[`${d}-${m}`] || "or";
+const JOIN = { or: "또는", rank: "또는", and: "그리고" };
 function save() {
   if (!docRef) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     const keys = Object.keys(S.picks).sort().slice(-180);
-    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
+    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: pruned(S.mode), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
     catch (e) { console.warn(e); }
   }, 700);
 }
@@ -470,7 +474,7 @@ async function initStore() {
       const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
       S.fav = new Set(v.fav || []); S.picks = mig(v.picks); S.portions = mig(v.portions || v.extra);
       if (v.rest) S.rest = v.rest;
-      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.rank = v.rank || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.rank = v.rank || {}; S.mode = v.mode || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
       if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
       if (S.rows.length) render();
     }
@@ -734,8 +738,9 @@ function renderSheet() {
     const by = Object.fromEntries(itemsFor(S.date, m, x.id).map((it) => [it.name, it]));
     const extra = portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "";
     // 한 끼니에 두 곳을 담았으면 둘 중 하나라는 뜻 — 순위를 눌러 바꾼다
-    const rk = arr.length > 1 ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${S.date}-${m}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
-    if (ri > 0) body += `<p class="or">또는</p>`;
+    const md = modeOf(S.date, m), mk = `${S.date}-${m}`;
+    const rk = arr.length > 1 && md === "rank" ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${mk}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
+    if (ri > 0) body += `<div class="join"><span class="sg" role="group" aria-label="두 식당의 관계">${[["rank", "순위"], ["or", "또는"], ["and", "그리고"]].map(([v, t]) => `<button data-mode="${v}" data-mk="${mk}" aria-pressed="${md === v}">${t}</button>`).join("")}</span></div>`;
     body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span><button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
@@ -762,7 +767,9 @@ function message(d) {
   if ((S.memo[d] || "").trim()) out.push(`📝 ${S.memo[d].trim()}`);
   for (const m of Object.keys(MEALS)) for (const [ri, x] of pickedRests(d, m).entries()) {
     const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
-    const rk = pickedRests(d, m).length > 1 ? ` (${ri + 1}순위)` : "";
+    const multi = pickedRests(d, m).length > 1, md = modeOf(d, m);
+    const rk = multi && md === "rank" ? ` (${ri + 1}순위)` : "";
+    if (multi && ri > 0) out.push(`— ${JOIN[md]} —`);
     const n = portionsOf(k), items = itemsFor(d, m, x.id);
     const by = Object.fromEntries(items.map((it) => [it.name, it]));
     // 진열대 섹션 순서대로 묶는다 — 섹션 이름이 먼저, 그 섹션에서 집을 것들이 뒤에
@@ -798,9 +805,11 @@ function cardBlocks(d) {
       const tag = /pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "";
       rows.push({ text: name, q, side: isSide(it), coin: it.drink ? 0 : it.coin || 0, drink: !!it.drink, pick: tag === "Pick", tag });
     }
+    // Deli·Side·Pick 이 있는 식당은 같은 구분끼리 모은다 (음료는 맨 뒤)
+    if (rows.some((r) => r.tag)) { const o = { Deli: 0, Pick: 1, Side: 2 }; rows.forEach((r, i) => { r.i = i; }); rows.sort((a, b2) => (a.drink - b2.drink) || ((o[a.tag] ?? 3) - (o[b2.tag] ?? 3)) || (a.i - b2.i)); }
     const b = budget(items, sel, n);
     if (b.fixed) rows.push({ text: "지정 음료", q: b.fixed, drink: true });
-    out.push({ title: MEALS[m], rest: x.name, extra: n - 1, rows, rank: arr.length > 1 ? ri + 1 : 0 });
+    out.push({ title: MEALS[m], rest: x.name, extra: n - 1, rows, rank: arr.length > 1 && modeOf(d, m) === "rank" ? ri + 1 : 0, join: ri > 0 ? JOIN[modeOf(d, m)] : "" });
   });
   return out;
 }
@@ -832,9 +841,9 @@ function drawCard(d) {
     y += h + 14; }
   y += 20;
   blocks.forEach((b, bi) => {
-    const top = y, or = b.rank > 1 && blocks[bi - 1]?.title === b.title;
+    const top = y, or = !!b.join;
     ops.push(() => {
-      if (or) { font(600, 11); const t = "또는", tw = cx.measureText(t).width, mid = W / 2; cx.fillStyle = LINE; cx.fillRect(P, top, mid - tw / 2 - 10 - P, .5); cx.fillRect(mid + tw / 2 + 10, top, W - P - mid - tw / 2 - 10, .5); cx.fillStyle = MUTED; cx.fillText(t, mid - tw / 2, top + 4); }
+      if (or) { font(600, 11); const t = b.join, tw = cx.measureText(t).width, mid = W / 2; cx.fillStyle = LINE; cx.fillRect(P, top, mid - tw / 2 - 10 - P, .5); cx.fillRect(mid + tw / 2 + 10, top, W - P - mid - tw / 2 - 10, .5); cx.fillStyle = MUTED; cx.fillText(t, mid - tw / 2, top + 4); }
       else { cx.fillStyle = LINE; cx.fillRect(P, top, W - 2 * P, .5); }
       font(600, 15); cx.fillStyle = INK; cx.fillText(b.title, P, top + 30); let x = P + cx.measureText(b.title).width + 8;
       font(400, 13); cx.fillStyle = MUTED; cx.fillText(b.rest, x, top + 30); x += cx.measureText(b.rest).width + 8;
@@ -843,7 +852,7 @@ function drawCard(d) {
     y += 50;
     for (const [ii, it] of b.rows.entries()) {
       const ry = y; if (it.drink) used.drink = true; else if (it.pick) used.pick = true; else if (it.coin) used.coin = true;
-      font(400, 11); const tagW = it.tag ? cx.measureText(it.tag).width + 8 : 0; font(400, 15);
+      font(600, 10); const tagW = it.tag ? cx.measureText(it.tag).width + 12 + 8 : 0; font(400, 15);
       const right = (it.drink ? 1 : it.coin) * 11 + 10 + tagW;
       const ls = wrap(it.text, W - 2 * P - right - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0));
       ops.push(() => { ls.forEach((ln, i) => { const ly = ry + 15 + i * 22; let x = P;
@@ -856,7 +865,10 @@ function drawCard(d) {
         const n = it.drink ? 1 : it.coin, cy = ry + 10;
         for (let k = 0; k < n; k++) { const dx = W - P - 4 - (n - 1 - k) * 11; cx.beginPath(); cx.arc(dx, cy, 3.5, 0, Math.PI * 2);
           if (it.drink) { cx.lineWidth = 1.3; cx.strokeStyle = OLIVE; cx.stroke(); } else { cx.fillStyle = it.pick ? MUSTARD : OLIVE; cx.fill(); } }
-        if (it.tag) { font(400, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText(it.tag, W - P - n * 11 - 6, ry + 14); cx.textAlign = "left"; } });
+        if (it.tag) { // 현장 구분 칩: Deli 올리브 · Side 회색 · Pick 머스터드
+          const [bg, fg] = it.tag === "Deli" ? [OLIVE, "#fff"] : it.tag === "Pick" ? [MUSTARD, "#fff"] : ["rgba(29,27,20,.08)", INK];
+          font(600, 10); const tw = cx.measureText(it.tag).width, w = tw + 12, x0 = W - P - n * 11 - 8 - w;
+          cx.fillStyle = bg; cx.beginPath(); cx.roundRect(x0, cy - 8, w, 16, 8); cx.fill(); cx.fillStyle = fg; cx.textBaseline = "middle"; cx.fillText(it.tag, x0 + 6, cy + .5); cx.textBaseline = "alphabetic"; } });
       y += ls.length * 22 + (b.rows[ii + 1]?.side ? 0 : 8); // 곁들임은 윗줄에 바짝 붙인다
     }
     y += 10;
@@ -928,6 +940,7 @@ function onTap(e) {
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
+  if (b.dataset.mode) { S.mode[b.dataset.mk] = b.dataset.mode; save(); render(); return; }
   if (b.dataset.rank) { // 순위 칩: 1순위를 누르면 다른 곳이 1순위로, 2순위를 누르면 그곳이 1순위로
     const key = b.dataset.rank, other = pickedRests(S.date, key.slice(9)).find((x) => x.id !== b.dataset.rid);
     S.rank[key] = b.classList.contains("first") && other ? other.id : b.dataset.rid;

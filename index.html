@@ -315,6 +315,8 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .sheet .memo::placeholder { color: var(--muted); }
 .sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
 .sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
+.sheet h3 .ate { margin-left: auto; margin-right: 12px; padding: 4px 10px; border-radius: 999px; background: var(--well); color: var(--ink); font-size: 11px; font-weight: 600; }
+.sheet h3 .ate[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
 .sheet .join { display: flex; justify-content: center; margin: 16px 0 -4px; }
 .sheet .join .sg button { padding: 5px 12px; }
 .sheet .none { color: var(--muted); font-size: 13px; padding: 16px 0; margin: 0; }
@@ -361,7 +363,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, memo: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -416,9 +418,16 @@ function itemsFor(d, m, rid = S.rest) {
   cache.set(k, list);
   return list;
 }
+// 먹은 횟수: 보낸 것만 센다. 한 끼니에 두 곳을 '또는/순위'로 걸었으면 "이걸로 먹었어요"를 누른 쪽만 센다.
+function counts(k) {
+  const [r, dm] = k.split("|");
+  const rivals = Object.keys(S.picks).filter((o) => o !== k && o.split("|")[1] === dm && Object.keys(S.picks[o]?.items || {}).length);
+  if (!rivals.length || (S.mode[dm] || "or") === "and") return true;
+  return S.ate[dm] === r;
+}
 function freq() {
   const f = {};
-  for (const p of Object.values(S.picks)) if (p.sent) for (const n of Object.keys(p.items || {})) f[n] = (f[n] || 0) + 1;
+  for (const [k, p] of Object.entries(S.picks)) if (p.sent && counts(k)) for (const n of Object.keys(p.items || {})) f[n] = (f[n] || 0) + 1;
   return f;
 }
 const portionsOf = (k) => { const v = S.portions[k]; return v === true ? 2 : (v || 1); };
@@ -450,12 +459,14 @@ function pickedRests(d, m) {
 // 한 끼니에 두 곳을 담았을 때의 관계: or(둘 중 하나, 기본) · rank(순위) · and(둘 다)
 const modeOf = (d, m) => S.mode[`${d}-${m}`] || "or";
 const JOIN = { or: "또는", rank: "또는", and: "그리고" };
+// 관계·먹은 곳은 기록(picks)이 남아 있는 끼니 것만 둔다 — 횟수를 셀 때 필요하다
+const kept = (o, keys) => { const live = new Set(keys.map((k) => k.split("|")[1])); return Object.fromEntries(Object.entries(o || {}).filter(([k, v]) => v && live.has(k))); };
 function save() {
   if (!docRef) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     const keys = Object.keys(S.picks).sort().slice(-180);
-    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: pruned(S.mode), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
+    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
     catch (e) { console.warn(e); }
   }, 700);
 }
@@ -474,7 +485,7 @@ async function initStore() {
       const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
       S.fav = new Set(v.fav || []); S.picks = mig(v.picks); S.portions = mig(v.portions || v.extra);
       if (v.rest) S.rest = v.rest;
-      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.rank = v.rank || {}; S.mode = v.mode || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
       if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
       if (S.rows.length) render();
     }
@@ -741,7 +752,8 @@ function renderSheet() {
     const md = modeOf(S.date, m), mk = `${S.date}-${m}`;
     const rk = arr.length > 1 && md === "rank" ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${mk}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
     if (ri > 0) body += `<div class="join"><span class="sg" role="group" aria-label="두 식당의 관계">${[["rank", "순위"], ["or", "또는"], ["and", "그리고"]].map(([v, t]) => `<button data-mode="${v}" data-mk="${mk}" aria-pressed="${md === v}">${t}</button>`).join("")}</span></div>`;
-    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span><button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
+    const ate = arr.length > 1 && md !== "and" ? `<button class="ate" data-ate="${mk}" data-rid="${x.id}" aria-pressed="${S.ate[mk] === x.id}">${S.ate[mk] === x.id ? "먹었어요" : "이걸로 먹었어요"}</button>` : "";
+    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span>${ate}<button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
@@ -943,6 +955,7 @@ function onTap(e) {
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
+  if (b.dataset.ate) { const dm = b.dataset.ate; if (S.ate[dm] === b.dataset.rid) delete S.ate[dm]; else S.ate[dm] = b.dataset.rid; save(); render(); return; }
   if (b.dataset.mode) { S.mode[b.dataset.mk] = b.dataset.mode; save(); render(); return; }
   if (b.dataset.rank) { // 순위 칩: 1순위를 누르면 다른 곳이 1순위로, 2순위를 누르면 그곳이 1순위로
     const key = b.dataset.rank, other = pickedRests(S.date, key.slice(9)).find((x) => x.id !== b.dataset.rid);

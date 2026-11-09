@@ -465,7 +465,7 @@ function save() {
   if (!docRef) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    const keys = Object.keys(S.picks).sort().slice(-180);
+    const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
     try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
     catch (e) { console.warn(e); }
   }, 700);

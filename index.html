@@ -362,6 +362,10 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .gchk.sw[aria-pressed="true"] { background: var(--heart); }
 .gchk[aria-pressed="true"] svg { opacity: 1; }
 .gsp { width: 22px; }
+.stars { display: flex; gap: 0; margin: 6px 0 0 -5px; }
+.stars button { width: 28px; height: 26px; display: grid; place-items: center; color: var(--line); }
+.stars button[aria-pressed="true"] { color: var(--coin-pick); }
+.stars svg { width: 16px; height: 16px; fill: currentColor; pointer-events: none; }
 .sbody { display: grid; min-width: 0; padding: 14px 0; gap: 6px; }
 .sheet .sbody .sname { padding: 0; }
 .lnk { justify-self: start; font-size: 11px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
@@ -444,7 +448,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, stock: [], eaten: [], noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -620,14 +624,14 @@ const J = (v) => JSON.stringify(v ?? null);
 const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
 function snapshot() {
   const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
-  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions });
+  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions });
 }
 // 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
 const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
 const norm = (v) => { v = clone(v) || {}; v.picks = mig(v.picks); v.portions = mig(v.portions || v.extra); delete v.extra; return v; };
 function merge3(b, mine, theirs) {
   const out = { ...theirs, view: mine.view, rest: mine.rest }; // 보기·식당 탭은 기기마다 제 것을 쓴다
-  for (const f of ["picks", "portions", "rank", "mode", "ate", "memo"]) {
+  for (const f of ["picks", "portions", "rank", "mode", "ate", "memo", "rate"]) {
     const B = b[f] || {}, M = mine[f] || {}, T = theirs[f] || {}, o = {};
     for (const k of new Set([...Object.keys(M), ...Object.keys(T)])) { const v = J(M[k]) !== J(B[k]) ? M[k] : T[k]; if (v !== undefined) o[k] = v; }
     out[f] = o;
@@ -647,7 +651,7 @@ function applyState(v) {
   S.fav = new Set(v.fav || []); S.picks = v.picks || {}; S.portions = v.portions || {};
   if (v.rest) S.rest = v.rest;
   S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock : []; S.eaten = Array.isArray(v.eaten) ? v.eaten : [];
-  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.rate = v.rate || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
   archiveDone();
 }
 const remoteState = async () => { const snap = await docRef.get(); return snap.exists ? norm(snap.data()) : null; };
@@ -818,7 +822,7 @@ function gridBody(list, sel, f, isHidden) {
 function rowHtml(it, q, plain) {
   const nm = esc(it.name);
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it)].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it), S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
@@ -843,8 +847,10 @@ const rank = (c) => { const i = CAT_ORDER.indexOf(c); return i < 0 ? 50 : i; };
 // ---------- 조합 제안: ☆·보낸 적 있는 메뉴·오늘의 수제로 정확히 4코인(×인분)을 맞춘다 ----------
 function combos(items, f, n) {
   const target = 4 * n, maxSize = 3 + n;
-  const score = (it) => (S.fav.has(it.name) ? 3 : 0) + Math.min(f[it.name] || 0, 5) * .8 + (it.hand ? 1.2 : 0);
-  const pool = items.filter((it) => !it.drink && it.coin >= 1 && it.coin <= target && score(it) > 0)
+  // 별점: 4·5점은 담은 적이 없어도 후보에 오르고, 1·2점은 조합에서 뺀다
+  const star = (it) => { const r = S.rate[it.name]; return r ? (r - 3) * 1.5 : 0; };
+  const score = (it) => (S.fav.has(it.name) ? 3 : 0) + Math.min(f[it.name] || 0, 5) * .8 + (it.hand ? 1.2 : 0) + star(it);
+  const pool = items.filter((it) => !it.drink && it.coin >= 1 && it.coin <= target && !(S.rate[it.name] <= 2) && score(it) > 0)
     .map((it) => ({ it, s: score(it) })).sort((a, b) => b.s - a.s).slice(0, 16);
   const found = [];
   (function dfs(i, pick, sum) {
@@ -865,7 +871,7 @@ function combos(items, f, n) {
     if (out.length === 3) break;
   }
   const drinks = items.filter((it) => it.drink)
-    .map((it) => ({ it, s: (S.fav.has(it.name) ? 3 : 0) + (f[it.name] || 0) })).filter((d) => d.s > 0).sort((a, b) => b.s - a.s);
+    .map((it) => ({ it, s: (S.fav.has(it.name) ? 3 : 0) + (f[it.name] || 0) + star(it) })).filter((d) => d.s > 0 && !(S.rate[d.it.name] <= 2)).sort((a, b) => b.s - a.s);
   const drink = drinks[0]?.it || null;
   return out.map((c) => ({ ...c, drink }));
 }
@@ -903,7 +909,7 @@ function tile(it, q, times, hidden) {
   }
   // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" || S.q != null ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it)].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" || S.q != null ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it), S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
@@ -985,6 +991,8 @@ function ordered(sel, by) {
 }
 const dayLabel = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)} ${WD[ymd(d).getUTCDay()]}`;
 // 재고: 가져와서 아직 안 먹은 것. 오래된 것부터.
+const STAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.800l1.900 3.900 4.300.600-3.100 3 .700 4.300L8 11.600l-3.800 2 .700-4.300-3.100-3 4.300-.600z"/></svg>';
+const starsHtml = (name) => { const r = S.rate[name] || 0; return `<span class="stars" role="group" aria-label="별점">${[1, 2, 3, 4, 5].map((v) => `<button data-rate="${esc(name)}" data-v="${v}" aria-pressed="${v <= r}" aria-label="${v}점">${STAR}</button>`).join("")}</span>`; };
 function renderStock(el) {
   const today = ymd(todayYmd());
   const rows = [...S.stock].sort((a, b) => a.d.localeCompare(b.d) || (a.t || 0) - (b.t || 0)).map((e) => {
@@ -993,13 +1001,13 @@ function renderStock(el) {
     return `<li><button class="gchk" data-eat="${esc(e.src)}" aria-label="먹었어요"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></button>
       <span class="sbody"><span class="sname"><span>${esc(stockName(e))}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
   }).join("");
-  const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span></span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">되돌리기</button></li>`).join("");
+  const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span>${starsHtml(stockName(e))}</span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">되돌리기</button></li>`).join("");
   const keep = el.querySelector(".panel")?.scrollTop || 0;
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button>
     <div class="panel stockp" role="dialog" aria-label="재고"><div class="grab"></div>
     <div class="sh"><b>Stock</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
     ${rows ? `<p class="gh">먹은 건 체크하면 사라져요</p><ul class="rows">${rows}</ul>` : `<p class="none">집에 남아 있는 게 없어요. 가져온 메뉴를 Today’s Meal에서 체크하면 여기에 쌓여요.</p>`}
-    ${eaten ? `<p class="gh">방금 먹은 것</p><ul class="rows faded">${eaten}</ul>` : ""}</div>`;
+    ${eaten ? `<p class="gh">방금 먹은 것 · 별점을 남기면 추천 조합에 반영돼요</p><ul class="rows faded">${eaten}</ul>` : ""}</div>`;
   el.hidden = false;
   el.querySelector(".panel").scrollTop = keep;
 }
@@ -1297,6 +1305,11 @@ function onTap(e) {
     S.eaten.push({ ...e, q: 1 }); S.eaten = S.eaten.slice(-20);
     if (e.q > 1) e.q -= 1; else S.stock = S.stock.filter((x) => x !== e);
     save(); render(); return;
+  }
+  if (b.dataset.rate != null) { // 별점: 같은 점수를 다시 누르면 지운다
+    const v = +b.dataset.v, nm = b.dataset.rate;
+    if (S.rate[nm] === v) delete S.rate[nm]; else S.rate[nm] = v;
+    cache.clear(); save(); render(); return;
   }
   if (b.dataset.uneat != null) { // 되돌리기
     const e = S.eaten[+b.dataset.uneat]; if (!e) return;

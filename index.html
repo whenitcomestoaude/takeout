@@ -121,8 +121,8 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 
 /* header — 1) 식당·갱신 시각(작게) 2) 날짜 제목 + 끼니 3) 카테고리 + 보기 전환 */
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: .5px solid var(--line); }
-.band .gutter { padding-block: 10px 14px; display: grid; gap: 10px; }
-.util { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.band .gutter { padding-block: 14px 14px; display: grid; gap: 14px; }
+.util { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .rtabs { display: flex; gap: 14px; }
 .rtabs button { font-size: 13px; color: var(--muted); padding: 2px 0; }
 .rtabs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
@@ -146,10 +146,7 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 .rs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
 .rs::-webkit-scrollbar { display: none; }
 .rs::after { content: ""; flex: none; width: 16px; }
-.tools { display: inline-flex; align-items: center; background: var(--well); border-radius: 999px; padding: 2px; }
-#viewslot { display: contents; }
-.vbtn, #stockbtn { height: 30px; min-width: 36px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--ink); }
-.vbtn:disabled { opacity: .3; }
+.vbtn { flex: none; width: 38px; height: 32px; border-radius: 999px; background: var(--well); display: grid; place-items: center; color: var(--ink); }
 .vbtn svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
 .rail button[data-cat], .rail .editbtn { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--ink); display: inline-flex; gap: 4px; align-items: center; }
 .rail button .n { font-size: 11px; opacity: .45; }
@@ -165,7 +162,8 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)); }
 .hint { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
 .hint .hrt { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; }
-.viewopt { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: 0 0 24px; }
+.viewopt { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: -4px 0 16px; }
+.vnote { font-size: 13px; color: var(--muted); min-width: 0; }
 .viewopt .sg { flex: none; }
 .viewopt .sg { padding: 3px; box-shadow: 0 0 0 .5px var(--line); }
 .viewopt .sg button { width: 36px; padding: 6px 0; display: grid; place-items: center; color: var(--muted); }
@@ -259,9 +257,13 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .tray { cursor: pointer; }
 .tray::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
 .tray .gutter { display: grid; gap: 12px; padding: 10px 14px 14px 18px; }
-.trow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding-top: 12px; border-top: .5px solid var(--line); }
+.trow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }
+.trow[hidden] { display: none; }
+.trow .tl { display: grid; gap: 8px; min-width: 0; }
+#traytabs button { padding: 5px 12px; }
+#stockprev p { grid-template-columns: 44px minmax(0, 1fr); }
 .tally { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.tl { display: flex; align-items: center; min-width: 0; }
+
 .nums:empty { display: none; }
 .meter { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .pill { display: inline-flex; align-items: baseline; gap: 2px; font-size: 13px; color: var(--muted); }
@@ -274,7 +276,7 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .portions { flex: none; }
 .portions { padding: 3px; }
 .portions button { flex: none; padding: 5px 11px; font-size: 13px; }
-.note { font-size: 13px; color: var(--muted); margin-top: -4px; }
+.note { font-size: 13px; color: var(--muted); }
 .tray.over .note { color: var(--warn); }
 .chips { display: grid; gap: 4px; cursor: pointer; }
 .chips p { margin: 0; display: grid; grid-template-columns: minmax(30px, auto) minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 13px; line-height: 1.45; color: var(--muted); }
@@ -345,9 +347,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .stockp .rows li { grid-template-columns: 22px minmax(0, 1fr) auto; padding-right: 16px; }
 .stockp .gh { margin: 16px 0 8px; }
 .rows.faded .sname { color: var(--muted); }
-.ur { display: inline-flex; align-items: center; gap: 10px; }
-#stockbtn svg { width: 17px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
-#stockbtn b { color: var(--heart); font-size: 12px; font-weight: 600; }
+
 
 .sheet .sname { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 12px 14px 0; font-size: 15px; font-weight: 400; }
 .sheet .sname span:first-child { overflow-wrap: anywhere; }
@@ -376,7 +376,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="top">
 <header class="band">
   <div class="gutter">
-    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="ur"><span id="stamp"></span><span class="tools"><span id="viewslot"></span><button id="stockbtn" aria-label="재고"></button></span></span></div>
+    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span id="stamp"></span></div>
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
   </div>
 </header>
@@ -387,13 +387,16 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="tray" id="tray" hidden>
   <div class="gutter">
     <div class="tally">
-      <div class="tl"><div class="nums" id="nums"></div><div class="meter" id="meter"></div></div>
+      <div class="sg" id="traytabs" role="group" aria-label="트레이 보기"><button data-tray="cart">Cart</button><button data-tray="stock">Stock</button></div>
       <div class="portions sg" id="portions" aria-label="추가취식">
         <button data-portion="1">기본</button><button data-portion="2">+1</button><button data-portion="3">+2</button>
       </div>
     </div>
-    <div class="note" id="note" hidden></div>
-    <div class="trow"><div class="chips" id="chips"></div><button class="shr" id="share" aria-label="이미지로 공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><button class="copy" id="copy">복사</button></div>
+    <div class="trow" id="cartpane">
+      <div class="tl"><div class="nums" id="nums" hidden></div><div class="meter" id="meter"></div><div class="note" id="note" hidden></div><div class="chips" id="chips"></div></div>
+      <button class="shr" id="share" aria-label="이미지로 공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><button class="copy" id="copy">복사</button>
+    </div>
+    <div class="trow" id="stockpane" hidden><div class="chips" id="stockprev"></div></div>
     <textarea id="fallback" hidden aria-label="복사할 내용"></textarea>
   </div>
 </div>
@@ -655,15 +658,15 @@ function render() {
   } else if (S.cat === "추천") {
     head = S.combos.length ? combosHtml(S.combos, n, sel) : "";
     head += liked.length ? foldHtml(liked, sel, f) : `<p class="hint">${heart(false)} 를 눌러두면 조합이 더 잘 맞아요.</p>`;
-  } else if (S.cat === "수제") head = `<p class="hint">오늘 나온 수제 메뉴예요.</p>`;
+  }
   const tabbed = S.cat !== "추천" && !S.edit;
   const ICON = { grid: '<svg viewBox="0 0 14 14"><rect x="1" y="1" width="5" height="5" rx="1.2"/><rect x="8" y="1" width="5" height="5" rx="1.2"/><rect x="1" y="8" width="5" height="5" rx="1.2"/><rect x="8" y="8" width="5" height="5" rx="1.2"/></svg>',
     list: '<svg viewBox="0 0 14 14"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>' };
   const other = S.view === "list" ? "grid" : "list";
-  $("viewslot").innerHTML = `<button class="vbtn" data-view="${other}"${tabbed ? "" : " disabled"} aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
   const anyBlk = tabbed && (cats.get(S.cat) || []).some(S.blocked);
-  const blkHint = anyBlk ? `<p class="hint">${bud.pickIn ? "Pick을 담아서" : "Pick은 3코인이라"} 남은 코인에 맞는 메뉴만 고를 수 있어요</p>` : "";
-  const legend = blkHint;
+  const note = anyBlk ? `${bud.pickIn ? "Pick을 담아서" : "Pick은 3코인이라"} 남은 코인에 맞는 메뉴만 고를 수 있어요` : S.cat === "수제" ? "오늘 나온 수제 메뉴예요." : "";
+  // 목록 맨 위 한 줄: 왼쪽에 안내, 오른쪽 끝에 보기 전환
+  const legend = tabbed ? `<div class="viewopt"><span class="vnote">${note}</span><button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button></div>` : "";
   if (S.cat === "추천" && !S.edit) { $("list").innerHTML = legend + head; renderTray(all, sel, n); $("stamp").textContent = S.updated ? `${S.updated} 갱신` : ""; return; }
   $("list").innerHTML = list.length || head
     ? `${legend}${head}${tabbed && S.view === "list" ? listBody(list, sel, f) : `<div class="grid">${gridBody(list, sel, f, isHidden)}</div>`}`
@@ -833,7 +836,17 @@ function renderTray(items, sel, n) {
     return `<p class="${m === S.meal ? "cur" : ""}"><b>${MEALS[m]}${extra}</b><span>${names.length ? names.join(", ") : "아직 없음"}</span>${clr}</p>`;
   }).join("");
   renderSheet();
-  $("stockbtn").innerHTML = `<svg viewBox="0 0 18 16"><path d="M1.500 9.500 3.700 2.800A1.500 1.500 0 0 1 5.100 1.800h7.800a1.500 1.500 0 0 1 1.400 1L16.500 9.500v3.200a1.500 1.500 0 0 1-1.500 1.500H3a1.500 1.500 0 0 1-1.500-1.500zM1.500 9.500h4.300a3.200 3.200 0 0 0 6.400 0h4.300"/></svg>${stockCount() ? `<b>${stockCount()}</b>` : ""}`;
+// 트레이 탭: Cart(오늘 담은 것) | Stock(집에 있는 것)
+  const stockMode = S.tray === "stock";
+  const cartN = Object.keys(S.picks).filter((kk) => kk.split("|")[1].slice(0, 8) === S.date).reduce((a, kk) => a + Object.values(S.picks[kk].items || {}).reduce((x, q) => x + q, 0), 0);
+  $("traytabs").innerHTML = [["cart", "Cart", cartN], ["stock", "Stock", stockCount()]].map(([v, t, c]) => `<button data-tray="${v}" aria-pressed="${stockMode === (v === "stock")}">${t}${c ? `<span class="cnt">${c}</span>` : ""}</button>`).join("");
+  $("cartpane").hidden = stockMode; $("stockpane").hidden = !stockMode; $("portions").hidden = stockMode;
+  if (stockMode) {
+    const today = ymd(todayYmd()), l = [...S.stock].sort((a, b2) => a.d.localeCompare(b2.d) || (a.t || 0) - (b2.t || 0));
+    $("stockprev").innerHTML = l.length ? l.slice(0, 3).map((e) => { const days = Math.round((today - ymd(e.d)) / 864e5);
+      return `<p class="cur"><b>${days > 0 ? `${days}일째` : "오늘"}</b><span>${esc(stockName(e))}${e.q > 1 ? ` ×${e.q}` : ""}${e.fz ? " · Frozen" : ""}</span></p>`; }).join("") + (l.length > 3 ? `<p><b></b><span>외 ${l.length - 3}가지</span></p>` : "")
+      : `<p><b></b><span>집에 남아 있는 게 없어요</span></p>`;
+  }
   $("copy").disabled = $("share").disabled = !anyPicks(S.date);
   $("copy").textContent = "복사";
 }
@@ -1105,7 +1118,7 @@ function onTap(e) {
   }
   const b = e.target.closest("button");
   // 트레이는 버튼 말고 어디를 눌러도 목록이 열린다
-  if (!b) { if (e.target.closest(".tray")) { S.sheet = true; renderSheet(); } return; }
+  if (!b) { if (e.target.closest(".tray")) { S.sheet = S.tray === "stock" ? "stock" : true; renderSheet(); } return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
@@ -1117,7 +1130,7 @@ function onTap(e) {
     S.rank[key] = b.classList.contains("first") && other ? other.id : b.dataset.rid;
     save(); render(); return;
   }
-  if (b.id === "stockbtn") { S.sheet = "stock"; renderSheet(); return; }
+  if (b.dataset.tray) { S.tray = b.dataset.tray; render(); return; }
   if (b.dataset.eat != null) { // 먹었어요: 하나씩 줄고, 다 먹으면 사라진다
     const e = S.stock.find((x) => x.src === b.dataset.eat); if (!e) return;
     S.eaten.push({ ...e, q: 1 }); S.eaten = S.eaten.slice(-20);

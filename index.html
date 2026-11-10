@@ -121,8 +121,8 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 
 /* header — 1) 식당·갱신 시각(작게) 2) 날짜 제목 + 끼니 3) 카테고리 + 보기 전환 */
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: .5px solid var(--line); }
-.band .gutter { padding-block: 14px 14px; display: grid; gap: 14px; }
-.util { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.band .gutter { padding-block: 10px 14px; display: grid; gap: 10px; }
+.util { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .rtabs { display: flex; gap: 14px; }
 .rtabs button { font-size: 13px; color: var(--muted); padding: 2px 0; }
 .rtabs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
@@ -146,7 +146,10 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 .rs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
 .rs::-webkit-scrollbar { display: none; }
 .rs::after { content: ""; flex: none; width: 16px; }
-.vbtn { flex: none; width: 36px; height: 32px; border-radius: 999px; background: var(--well); display: grid; place-items: center; color: var(--ink); }
+.tools { display: inline-flex; align-items: center; background: var(--well); border-radius: 999px; padding: 2px; }
+#viewslot { display: contents; }
+.vbtn, #stockbtn { height: 30px; min-width: 36px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--ink); }
+.vbtn:disabled { opacity: .3; }
 .vbtn svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
 .rail button[data-cat], .rail .editbtn { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--ink); display: inline-flex; gap: 4px; align-items: center; }
 .rail button .n { font-size: 11px; opacity: .45; }
@@ -343,8 +346,8 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .stockp .gh { margin: 16px 0 8px; }
 .rows.faded .sname { color: var(--muted); }
 .ur { display: inline-flex; align-items: center; gap: 10px; }
-#stockbtn { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--well); color: var(--ink); }
-#stockbtn b { color: var(--heart); font-weight: 600; margin-left: 2px; }
+#stockbtn svg { width: 17px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+#stockbtn b { color: var(--heart); font-size: 12px; font-weight: 600; }
 
 .sheet .sname { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 12px 14px 0; font-size: 15px; font-weight: 400; }
 .sheet .sname span:first-child { overflow-wrap: anywhere; }
@@ -373,11 +376,11 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="top">
 <header class="band">
   <div class="gutter">
-    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="ur"><span id="stamp"></span><button id="stockbtn">Stock</button></span></div>
+    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="ur"><span id="stamp"></span><span class="tools"><span id="viewslot"></span><button id="stockbtn" aria-label="재고"></button></span></span></div>
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
   </div>
 </header>
-<nav class="rail" aria-label="카테고리"><div class="gutter"><div class="rs" id="rail"></div><span id="viewslot"></span></div></nav>
+<nav class="rail" aria-label="카테고리"><div class="gutter"><div class="rs" id="rail"></div></div></nav>
 </div>
 <main><div class="gutter"><div id="list"><div class="empty">메뉴를 불러오는 중입니다.</div></div></div></main>
 
@@ -657,7 +660,7 @@ function render() {
   const ICON = { grid: '<svg viewBox="0 0 14 14"><rect x="1" y="1" width="5" height="5" rx="1.2"/><rect x="8" y="1" width="5" height="5" rx="1.2"/><rect x="1" y="8" width="5" height="5" rx="1.2"/><rect x="8" y="8" width="5" height="5" rx="1.2"/></svg>',
     list: '<svg viewBox="0 0 14 14"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>' };
   const other = S.view === "list" ? "grid" : "list";
-  $("viewslot").innerHTML = tabbed ? `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>` : "";
+  $("viewslot").innerHTML = `<button class="vbtn" data-view="${other}"${tabbed ? "" : " disabled"} aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
   const anyBlk = tabbed && (cats.get(S.cat) || []).some(S.blocked);
   const blkHint = anyBlk ? `<p class="hint">${bud.pickIn ? "Pick을 담아서" : "Pick은 3코인이라"} 남은 코인에 맞는 메뉴만 고를 수 있어요</p>` : "";
   const legend = blkHint;
@@ -830,7 +833,7 @@ function renderTray(items, sel, n) {
     return `<p class="${m === S.meal ? "cur" : ""}"><b>${MEALS[m]}${extra}</b><span>${names.length ? names.join(", ") : "아직 없음"}</span>${clr}</p>`;
   }).join("");
   renderSheet();
-  $("stockbtn").innerHTML = `Stock${stockCount() ? ` <b>${stockCount()}</b>` : ""}`;
+  $("stockbtn").innerHTML = `<svg viewBox="0 0 18 16"><path d="M1.500 9.500 3.700 2.800A1.500 1.500 0 0 1 5.100 1.800h7.800a1.500 1.500 0 0 1 1.400 1L16.500 9.500v3.200a1.500 1.500 0 0 1-1.500 1.500H3a1.500 1.500 0 0 1-1.500-1.500zM1.500 9.500h4.300a3.200 3.200 0 0 0 6.400 0h4.300"/></svg>${stockCount() ? `<b>${stockCount()}</b>` : ""}`;
   $("copy").disabled = $("share").disabled = !anyPicks(S.date);
   $("copy").textContent = "복사";
 }
@@ -885,9 +888,7 @@ function renderSheet() {
         const side = isSide(it), g = got[name], ke = esc(k);
         const lead = side ? `<span class="gsp"></span>`
           : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
-        const sub = side ? "" : g === "swap"
-          ? `<span class="swp"><input class="swapin" data-k="${ke}" data-n="${nm}" maxlength="40" placeholder="무엇으로 바꿨나요?"${fin ? " disabled" : ""} value="${esc(S.picks[k]?.swapTo?.[name] || "")}">${fin ? "" : `<button class="lnk" data-ungot="${nm}" data-k="${ke}">취소</button>`}</span>`
-          : g || fin ? "" : `<button class="lnk" data-swap="${nm}" data-k="${ke}">수정</button>`;
+        const sub = "";
         const right = g ? `<span class="gst">${g === "ok" ? "가져옴" : "바꿈"}</span><span></span>`
           : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">+</button></span>
           <button class="del" data-del="${nm}" data-k="${ke}" aria-label="${nm} 빼기">×</button>`;
@@ -1133,7 +1134,6 @@ function onTap(e) {
   if (b.dataset.undone) { uncommit(b.dataset.undone); save(); render(); return; }
   if (b.dataset.got != null) { setGot(k, b.dataset.got, S.picks[k]?.got?.[b.dataset.got] ? null : "ok"); save(); render(); return; }
   if (b.dataset.ungot != null) { unGot(k, b.dataset.ungot); save(); render(); return; }
-  if (b.dataset.swap != null) { setGot(k, b.dataset.swap, "swap"); save(); render(); requestAnimationFrame(() => document.querySelector(`.swapin[data-n="${CSS.escape(b.dataset.swap)}"]`)?.focus()); return; }
   if (b.dataset.gotall) { // 한 번에 체크 / 다시 누르면 전부 해제
     const kk = b.dataset.gotall, p = S.picks[kk]; if (!p) return;
     if (p.done) return;

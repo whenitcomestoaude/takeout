@@ -19,7 +19,8 @@
     return r.json();
   };
   const ns = {
-    mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }) },
+    mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }),
+      sync: async () => j(await fetch(url("sync"), { cache: "no-store" })) }, // 새로고침 버튼: 식당 메뉴를 지금 다시 받아 온다
     user: { id: async () => "shared" },
     db: { doc: () => ({
       get: async () => { const d = (await j(await fetch(url("state"), { cache: "no-store" }))).data; return { exists: !!d, data: () => d }; },
@@ -126,7 +127,11 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 .rtabs { display: flex; gap: 14px; }
 .rtabs button { font-size: 13px; color: var(--muted); padding: 2px 0; }
 .rtabs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
-#stamp { font-size: 11px; color: var(--muted); }
+#stamp { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; padding: 6px 0 6px 10px; margin: -6px 0; }
+#stamp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#stamp.busy svg { animation: spin .9s linear infinite; }
+#stamp:disabled { cursor: default; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .when { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .week { display: flex; gap: 16px; align-items: baseline; min-width: 0; }
 .day { display: inline-flex; align-items: baseline; gap: 5px; color: var(--muted); position: relative; }
@@ -393,7 +398,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="top">
 <header class="band">
   <div class="gutter">
-    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span id="stamp"></span></div>
+    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><button id="stamp" aria-label="메뉴 새로 가져오기"></button></div>
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
   </div>
 </header>
@@ -705,14 +710,14 @@ function render() {
   S.find = (q) => { const t = q.trim().toLowerCase().replace(/\s+/g, ""); if (!t) return bodyOf(S.cat === "추천" ? [] : list);
     const hit = items.filter((it) => it.name.toLowerCase().replace(/\s+/g, "").includes(t)).sort((a, b) => rank(a.cat) - rank(b.cat));
     return hit.length ? bodyOf(hit) : `<p class="hint">찾는 메뉴가 없어요.</p>`; };
-  if (searching) { $("list").innerHTML = `${legend}<div id="lbody">${S.find(S.q)}</div>`; renderTray(all, sel, n); $("stamp").textContent = S.updated ? `${S.updated} 갱신` : ""; return; }
-  if (S.cat === "추천" && !S.edit) { $("list").innerHTML = legend + head; renderTray(all, sel, n); $("stamp").textContent = S.updated ? `${S.updated} 갱신` : ""; return; }
+  if (searching) { $("list").innerHTML = `${legend}<div id="lbody">${S.find(S.q)}</div>`; renderTray(all, sel, n); setStamp(); return; }
+  if (S.cat === "추천" && !S.edit) { $("list").innerHTML = legend + head; renderTray(all, sel, n); setStamp(); return; }
   $("list").innerHTML = list.length || head
     ? `${legend}${head}${tabbed && S.view === "list" ? listBody(list, sel, f) : `<div class="grid">${gridBody(list, sel, f, isHidden)}</div>`}`
     : `<div class="empty">이 끼니엔 테이크아웃이 없어요.</div>`;
 
   renderTray(all, sel, n);
-  $("stamp").textContent = S.updated ? `${S.updated} 갱신` : "";
+  setStamp();
 }
 // 각 탭: 담은 적 있거나 ☆한 메뉴를 위로, 나머지는 '새로운 메뉴'로 나눠 보여준다
 function gridBody(list, sel, f, isHidden) {
@@ -1189,6 +1194,7 @@ function onTap(e) {
   if (!b) { if (e.target.closest(".tray")) { S.sheet = S.tray === "stock" ? "stock" : true; renderSheet(); } return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
+  if (b.id === "stamp") { refreshMenu(); return; }
   if (b.dataset.qopen != null) { S.q = ""; render(); $("q")?.focus(); return; }
   if (b.dataset.qclose != null) { S.q = null; render(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
@@ -1269,6 +1275,20 @@ function onTap(e) {
   }
 }
 
+// 갱신 시각 + 동그란 화살표: 누르면 메뉴를 새로 가져온다
+function setStamp() {
+  $("stamp").innerHTML = `${S.updated ? `<span>${esc(S.updated)}</span>` : ""}<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M12 7a5 5 0 1 1-1.600-3.660M12 1.800V4.200H9.600"/></svg>`;
+  $("stamp").classList.toggle("busy", !!S.syncing); $("stamp").disabled = !!S.syncing;
+}
+async function refreshMenu() {
+  if (S.syncing) return;
+  S.syncing = true; setStamp();
+  try {
+    const mcp = await claude.use("mcp");
+    if (mcp?.sync) await mcp.sync().catch(() => toast("새로 가져오지 못했어요. 저장된 메뉴를 다시 읽을게요")); // 독립 페이지: 식당에서 지금 다시 받아 온다
+    await load(true);
+  } finally { S.syncing = false; setStamp(); }
+}
 // ---------- load ----------
 async function load(refresh = false) {
   const mcp = await claude.use("mcp");

@@ -10,7 +10,8 @@
     return r.json();
   };
   const ns = {
-    mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }) },
+    mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }),
+      sync: async () => j(await fetch(url("sync"), { cache: "no-store" })) }, // 새로고침 버튼: 식당 메뉴를 지금 다시 받아 온다
     user: { id: async () => "shared" },
     db: { doc: () => ({
       get: async () => { const d = (await j(await fetch(url("state"), { cache: "no-store" }))).data; return { exists: !!d, data: () => d }; },

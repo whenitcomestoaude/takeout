@@ -1,0 +1,1441 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="happeachne takeout">
+<meta name="theme-color" content="#ffffff"><meta name="robots" content="noindex,nofollow">
+<link rel="apple-touch-icon" href="icon.png"><link rel="icon" href="icon.png">
+<style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<script>
+// 독립 페이지용 연결부: 아티팩트의 claude.use(...) 자리에 Supabase 함수(takeout-api)를 직접 부르는 구현을 끼운다.
+// 열쇠는 코드에 없다 — 주소 끝의 #k=... 에서 읽고, 이 기기에 기억해 둔다.
+(() => {
+  const API = "https://omigzdxdxywtjsfzimks.supabase.co/functions/v1/takeout-api";
+  let k = (location.hash.match(/k=([^&]+)/) || [])[1] || "";
+  try { if (k) localStorage.setItem("takeout-key", k); else k = localStorage.getItem("takeout-key") || ""; } catch (_) {}
+  const url = (api) => `${API}?k=${encodeURIComponent(k)}&api=${api}`;
+  const j = async (r) => {
+    if (!r.ok) { const e = new Error(`HTTP ${r.status}`); e.code = r.status === 403 ? "열쇠가 맞지 않아요" : `HTTP ${r.status}`; throw e; }
+    return r.json();
+  };
+  const ns = {
+    mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }),
+      sync: async () => j(await fetch(url("sync"), { cache: "no-store" })),
+      ping: async (id) => j(await fetch(`${url("ping")}&id=${encodeURIComponent(id)}`, { cache: "no-store" })) }, // 새로고침 버튼: 식당 메뉴를 지금 다시 받아 온다
+    user: { id: async () => "shared" },
+    db: { doc: () => ({
+      get: async () => { const d = (await j(await fetch(url("state"), { cache: "no-store" }))).data; return { exists: !!d, data: () => d }; },
+      set: async (v) => { await j(await fetch(url("state"), { method: "POST", body: JSON.stringify(v) })); }, // 글자 본문 = 사전 요청 없는 단순 POST
+    }) },
+    // 이미지는 iPhone 공유 시트로 바로 넘긴다
+    downloads: { save: async ({ filename, data }) => {
+      const f = new File([data], filename, { type: "image/png" });
+      const err = (code) => Object.assign(new Error(code), { code });
+      if (!navigator.canShare || !navigator.canShare({ files: [f] })) throw err("unavailable");
+      try { await navigator.share({ files: [f] }); return { status: "saved" }; }
+      catch (e) { throw err(e && e.name === "AbortError" ? "declined" : "unavailable"); }
+    } },
+  };
+  window.claude = { use: async (n) => (k ? ns[n] || null : null) };
+
+  // 열쇠 없이 열렸을 때: 열쇠(또는 열쇠가 붙은 주소)를 한 번 붙여 넣게 한다
+  if (!k) addEventListener("DOMContentLoaded", () => {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;inset:0;z-index:99;background:#fff;display:grid;place-content:center;gap:12px;padding:24px;font:400 15px -apple-system,system-ui,sans-serif;color:#1D1B14;text-align:center";
+    box.innerHTML = `<b style="font-size:17px">열쇠가 필요해요</b><span style="color:rgba(29,27,20,.5);font-size:13px">받은 주소 전체나 열쇠를 붙여 넣어 주세요</span>
+      <input id="kin" autocomplete="off" autocapitalize="off" style="font:inherit;padding:12px 14px;border-radius:12px;border:0;background:rgba(29,27,20,.06);width:min(280px,80vw);text-align:center">
+      <button id="kgo" style="font:600 15px inherit;padding:12px;border-radius:999px;border:0;background:#5B5121;color:#fff">열기</button>`;
+    document.body.appendChild(box);
+    box.querySelector("#kgo").addEventListener("click", () => {
+      const v = box.querySelector("#kin").value.trim(), m = v.match(/k=([^&\s]+)/);
+      const key = m ? m[1] : v; if (!key) return;
+      try { localStorage.setItem("takeout-key", key); } catch (_) {}
+      location.hash = `k=${key}`; location.reload();
+    });
+  });
+
+  // 다시 앞으로 꺼냈을 때 오래됐으면 새로 읽는다 — 상대가 고른 것과 새 메뉴가 보이게
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) hiddenAt = Date.now();
+    else if (hiddenAt && Date.now() - hiddenAt > 60_000) location.reload();
+  });
+})();
+</script></head><body>
+<title>happeachne takeout</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Asta+Sans:wght@300;400;600&family=Jost:wght@400;500&display=swap">
+<style>
+/* Layout: deep green header band (date + meal) → sticky category rail → 2-col tile grid → fixed tray with coin meter and copy.
+   Point colour: basil green + egg-yolk yellow — away from Samsung blue and Welstory orange, warm and appetising. */
+:root {
+  --bg: #FFFFFF;
+  --tile: #FFFFFF;
+  --page: #FFFFFF;
+  --card: #F6F5F2;
+  --ink: #1D1B14;
+  --muted: rgba(29, 27, 20, .5);
+  --line: rgba(29, 27, 20, .1);
+  --band: #5B5121;
+  --band-ink: #FBF5EC;
+  --band-dim: rgba(251, 245, 236, .62);
+  --gold: #EBDD8E;
+  --gold-deep: #5B5121;
+  --sel: #FCE2C3;
+  --sel-ink: #2A2510;
+  --btn: #5B5121;
+  --btn-ink: #FFFFFF;
+  --edge: rgba(91, 81, 33, .32);
+  --soft: #F0E9C8;
+  --warn: #ED6328;
+  --heart: #ED6328;
+  --coin: #5B5121;
+  --well: rgba(29, 27, 20, .06);
+  --coin-pick: #BFA732;
+  --mark: #EBDD8E;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif;
+  --mono: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121210; --tile: #2A2922; --page: #121210; --card: #1C1B17; --ink: #F3ECDD; --muted: rgba(243, 236, 221, .58); --line: rgba(243, 236, 221, .13);
+    --band: #2B2610; --band-ink: #F3ECDD; --band-dim: rgba(243, 236, 221, .5); --gold: #E6D588; --gold-deep: #CDB84A;
+    --sel: #F6DDB8; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121210; --tile: #2A2922; --page: #121210; --card: #1C1B17; --ink: #F3ECDD; --muted: rgba(243, 236, 221, .58); --line: rgba(243, 236, 221, .13);
+    --band: #2B2610; --band-ink: #F3ECDD; --band-dim: rgba(243, 236, 221, .5); --gold: #E6D588; --gold-deep: #CDB84A;
+    --sel: #F6DDB8; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+button { touch-action: manipulation; }
+.tile .add *, .radd * { pointer-events: none; }
+/* 글자: 11 / 13 / 15 / 17 / 34, 굵기 400 · 600. 간격: 4의 배수. 모서리: 카드 14, 컨트롤 10, 알약 999. 선 대신 면으로 구분. */
+body { background: var(--page); color: var(--ink); font: 300 15px/1.4 var(--sans); -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
+.gutter { max-width: 640px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.combo-h b, .fold-t, .sheet .sh b { text-transform: uppercase; letter-spacing: .06em; }
+.rq, .qty, .pill b, .kc { font-variant-numeric: tabular-nums; }
+
+/* header — 1) 식당·갱신 시각(작게) 2) 날짜 제목 + 끼니 3) 카테고리 + 보기 전환 */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: .5px solid var(--line); }
+.band .gutter { padding-block: 14px 14px; display: grid; gap: 14px; }
+.util { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rtabs { display: flex; gap: 14px; }
+.rtabs button { font-size: 13px; color: var(--muted); padding: 2px 0; }
+.rtabs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+#stamp { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; padding: 6px 0 6px 10px; margin: -6px 0; }
+#stamp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#stamp.busy svg { animation: spin .9s linear infinite; }
+#stamp:disabled { cursor: default; }
+.utilr { display: inline-flex; align-items: center; gap: 2px; }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--heart); animation: live 1.6s ease-in-out infinite; }
+@keyframes live { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .25; transform: scale(.7); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.when { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.week { display: flex; gap: 16px; align-items: baseline; min-width: 0; }
+.day { display: inline-flex; align-items: baseline; gap: 5px; color: var(--muted); position: relative; }
+.day .dn { font-size: 17px; font-weight: 400; line-height: 1; font-variant-numeric: tabular-nums; }
+.day .wl { font-size: 13px; line-height: 1; }
+.day[aria-pressed="true"] { color: var(--ink); }
+.day[aria-pressed="true"] .dn { font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
+.day[aria-pressed="true"] .wl { font-size: 17px; font-weight: 600; }
+.day.today::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--heart); align-self: flex-start; margin: 2px 0 0 -2px; }
+.sg { display: inline-flex; flex: none; background: var(--well); border-radius: 999px; padding: 3px; min-width: 0; }
+.sg button { flex: none; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 400; line-height: 1.2; color: var(--muted); text-align: center; white-space: nowrap; }
+.sg button[aria-pressed="true"] { background: var(--tile); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(29, 27, 20, .12); }
+.sg .cnt { font-size: 11px; font-weight: 600; color: var(--heart); margin-left: 4px; }
+
+/* category rail */
+.rail .gutter { display: flex; align-items: center; gap: 8px; padding-block: 0 12px; }
+.rs { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
+.rs::-webkit-scrollbar { display: none; }
+.rs::after { content: ""; flex: none; width: 16px; }
+.vbtn { flex: none; width: 38px; height: 32px; border-radius: 999px; background: var(--well); display: grid; place-items: center; color: var(--ink); }
+.vbtn svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
+svg.ln { fill: none !important; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.viewopt .vbtn + .vbtn { margin-left: -4px; }
+.qbox { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; background: var(--well); color: var(--muted); }
+.qbox svg { width: 14px; height: 14px; flex: none; }
+.qbox input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); font: 400 16px var(--sans); padding: 0; -webkit-appearance: none; appearance: none; }
+.qbox input::-webkit-search-cancel-button { display: none; }
+.rail button[data-cat], .rail .editbtn { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--ink); display: inline-flex; gap: 4px; align-items: center; }
+.rail button .n { font-size: 11px; opacity: .45; }
+.rail button[aria-pressed="true"][data-cat] { background: var(--btn); color: var(--btn-ink); font-weight: 600; }
+.rail button.has::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--gold-deep); }
+.rail button[aria-pressed="true"].has::after { background: var(--btn-ink); }
+.rail button .hrt { color: var(--heart); width: 11px; height: 11px; }
+.rail .editbtn { color: var(--muted); }
+.rail .editbtn[aria-pressed="true"] { background: var(--soft); color: var(--gold-deep); }
+.rail button.off { text-decoration: line-through; opacity: .5; }
+
+/* list */
+main .gutter { padding-block: 20px calc(170px + env(safe-area-inset-bottom, 0px)); }
+.hint { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
+.hint .hrt { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; }
+.viewopt { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: -4px 0 16px; }
+.vnote { flex: 1; font-size: 12px; color: var(--muted); min-width: 0; }
+.viewopt .sg { flex: none; }
+.viewopt .sg { padding: 3px; box-shadow: 0 0 0 .5px var(--line); }
+.viewopt .sg button { width: 36px; padding: 6px 0; display: grid; place-items: center; color: var(--muted); }
+.viewopt .sg button[aria-pressed="true"] { color: var(--ink); }
+.viewopt .sg svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
+.blkhint { margin-right: auto; font-size: 12px; color: var(--muted); }
+.cap { grid-column: 1 / -1; margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.cap.sep { margin-top: 28px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 520px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* tiles — 목록 줄과 같은 문법을 카드로: 체크 원, 이름, 보조 줄, 수량 캡슐 */
+.tile { position: relative; background: var(--card); border-radius: 14px; min-width: 0; display: grid; }
+.tile .add { display: grid; grid-template-rows: auto auto 1fr; gap: 8px; align-content: start; width: 100%; padding: 14px 14px 16px; }
+.tile .lead { margin-bottom: 8px; }
+.tile .name { font-size: 14px; font-weight: 400; line-height: 1.3; overflow-wrap: anywhere; }
+.tile .rsub { align-self: start; flex-wrap: wrap; row-gap: 4px; }
+.tile.on, .combo[aria-pressed="true"], .rows li.on { background: var(--soft); }
+.tile.on .lead { background: var(--btn); box-shadow: none; }
+.tile.on .lead svg { opacity: 1; }
+.tile.on .add { padding-bottom: 58px; }
+.tile .rq { position: absolute; right: 12px; bottom: 12px; }
+.coin { display: flex; align-items: center; gap: 3px; min-height: 16px; color: var(--coin); }
+.coin i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.coin.pk i { background: var(--coin-pick); }
+.coin i.o { background: transparent; border: 1.5px solid currentColor; }
+.coin .v { font-size: 11px; line-height: 1; color: var(--muted); }
+.tile .meta { font-size: 11px; color: var(--muted); }
+.star { position: absolute; top: 6px; right: 4px; width: 40px; height: 40px; color: var(--muted); display: grid; place-items: center; }
+.hrt { width: 14px; height: 14px; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; pointer-events: none; }
+.hrt.f { fill: currentColor; }
+.star[aria-pressed="true"], .rstar[aria-pressed="true"] { color: var(--heart); }
+.grid > .gh { grid-column: 1 / -1; margin: 12px 16px -4px; }
+.grid > .gh:first-child { margin-top: 0; }
+.tile.muted { opacity: .38; }
+.tile.muted .name { text-decoration: line-through; }
+.tile.blk .add, .rows li.blk .radd { opacity: .3; }
+.editbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.editbar .hint { margin: 0; }
+.catoff { padding: 6px 12px; border-radius: 999px; font-size: 13px; background: var(--well); }
+
+/* rows — iOS 묶음 목록: 머리글은 카드 밖, 줄은 제목+보조 줄, 구분선은 글자 시작점부터 */
+.gh { margin: 24px 16px 8px; font-size: 12px; color: var(--muted); }
+.gh:first-of-type { margin-top: 0; }
+.rows { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 14px; overflow: hidden; }
+.rows li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 40px; align-items: center; min-height: 60px; padding-left: 16px; }
+.rows li + li::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: .5px; background: var(--line); }
+.radd { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 14px 8px 14px 0; }
+.radd .lead { flex: none; }
+.radd .rt { flex: 1; }
+.radd .ph { margin: -2px 4px -2px 4px; align-self: center; }
+.radd .lead { margin-top: -1px; } /* 체크 원을 이름 첫 줄의 가운데에 */
+.lead { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); display: grid; place-items: center; }
+.lead svg { width: 12px; height: 12px; fill: none; stroke: var(--btn-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.rows li.on .lead { background: var(--btn); box-shadow: none; }
+.rows li.on .lead svg { opacity: 1; }
+.rt { display: grid; gap: 7px; min-width: 0; }
+.rname { font-size: 14px; line-height: 1.3; font-weight: 400; overflow-wrap: anywhere; }
+.sold { display: inline-block; font-style: normal; font-size: 10px; font-weight: 600; line-height: 16px; padding: 0 6px; margin-right: 6px; border-radius: 999px; background: var(--well); color: var(--muted); vertical-align: 1px; white-space: nowrap; }
+.rsub { display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 1.2; color: var(--muted); min-width: 0; }
+.rsub .coin { min-height: 0; flex: none; }
+.rsub .coin i { width: 6px; height: 6px; }
+.rq { display: inline-flex; align-items: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+.rq:not(:empty) { background: var(--well); border-radius: 999px; padding: 2px; }
+.rq span { min-width: 18px; text-align: center; line-height: 28px; font-weight: 400; }
+.rq button svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; pointer-events: none; }
+.rq button { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 400 17px/1 var(--sans); }
+.rstar { width: 40px; height: 44px; color: var(--muted); display: grid; place-items: center; }
+.fold { margin-top: 8px; }
+.fold-h { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 0; }
+.fold-t { font: 600 11px var(--mono); }
+.fold-h .n { font-size: 12px; color: var(--muted); }
+
+/* combos */
+.combos { display: grid; gap: 12px; margin-bottom: 24px; }
+@media (min-width: 520px) { .combos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.combo { border-radius: 14px; padding: 16px; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: start; background: var(--card); min-width: 0; width: 100%; }
+.combo * { pointer-events: none; }
+.combo .lead { margin-top: 0; }
+.combo-b { display: grid; gap: 10px; min-width: 0; }
+.combo-h { display: flex; justify-content: space-between; align-items: center; min-height: 22px; line-height: 1; font-size: 12px; color: var(--muted); margin-bottom: 0; }
+.combo-h b { font: 600 11px var(--mono); color: var(--ink); }
+.ci { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: start; font-size: 14px; line-height: 1.3; }
+.ci .coin { height: 1.3em; min-height: 0; }
+.ci > span:last-child { overflow-wrap: anywhere; }
+.combo[aria-pressed="true"] .lead { background: var(--btn); box-shadow: none; }
+.combo[aria-pressed="true"] .lead svg { opacity: 1; }
+.empty { padding: 40px 0; color: var(--muted); display: grid; gap: 12px; justify-items: start; }
+.empty button { padding: 10px 16px; border-radius: 10px; background: var(--well); color: var(--ink); }
+
+/* tray */
+.tray { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 6; max-width: 616px; margin: 0 auto; background: var(--tile); border-radius: 26px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29, 27, 20, .14); }
+.tray { cursor: pointer; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); border-radius: 20px; }
+
+.tray .gutter { display: grid; gap: 6px; padding: 10px 10px 10px 18px; }
+/* 아래 내비: 떠 있는 알약. Menu / Cart / Stock / Report */
+.nav { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 6; max-width: 616px; margin: 0 auto; height: 56px; padding: 4px; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--tile); border-radius: 999px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29,27,20,.14); }
+.nav button { position: relative; display: grid; justify-items: center; align-content: center; gap: 3px; border-radius: 999px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+.nav button[aria-pressed="true"] { background: var(--well); color: var(--ink); }
+.nav svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.nav .cnt { position: absolute; top: 5px; left: calc(50% + 9px); font-size: 10px; font-weight: 600; color: var(--heart); letter-spacing: 0; }
+.ptitle { font: 600 11px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+/* 탭마다 헤더에서 쓰는 것만 남긴다 */
+body:not(.tab-menu) .rail, body:not(.tab-menu) #meals, body:not(.tab-menu) #rests, body:not(.tab-menu) #list, body:not(.tab-menu) .tray { display: none !important; }
+body.tab-stock .when, body.tab-report .when { display: none; }
+body.tab-stock .band .gutter, body.tab-report .band .gutter { padding-bottom: 12px; }
+/* 페이지가 된 팝업 */
+.sheet.page { position: static; display: block; z-index: auto; }
+.sheet.page .panel { position: static; background: none; border-radius: 0; max-height: none; overflow: visible; padding: 0; }
+.sheet.page .gh:first-child { margin-top: 0; }
+.page .fbar { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); margin: 24px 0 0; padding: 10px; border: 0; border-radius: 20px; background: var(--tile); box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29,27,20,.14); grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
+.page .fbar p { grid-column: 1 / -1; }
+.page .fbar .shmenu { right: auto; left: 0; }
+.page .fbar .copy.shico { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--well); color: var(--ink); }
+/* Report */
+.rep-hero { padding: 8px 0 20px; }
+.rep-hero small { display: block; font-size: 12px; color: var(--muted); }
+.rep-hero b { display: block; margin: 6px 0 8px; font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -.02em; }
+.rep-hero span { font-size: 12px; color: var(--muted); }
+.sheet .rep .rows li { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; min-height: 48px; padding: 0 16px; font-size: 14px; }
+.rep .bar { height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
+.rep .bar i { display: block; height: 100%; border-radius: 3px; background: var(--btn); }
+.sheet .rep .rows li em { font-style: normal; font-size: 12px; color: var(--muted); }
+.sheet .rep .rows.val li { grid-template-columns: minmax(0, 1fr) auto; }
+.sheet .rep .rows li > span:first-child { color: var(--muted); font-size: 12px; }
+.sheet .rep .rows.val li > span:first-child { color: var(--ink); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.trow[hidden] { display: none; }
+.trow .tl { display: grid; gap: 8px; min-width: 0; }
+#traytabs button { padding: 5px 12px; }
+#stockprev p { grid-template-columns: 44px minmax(0, 1fr); }
+.tally { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.nums:empty { display: none; }
+.meter { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.worth { font-size: 11px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.pill { display: inline-flex; align-items: baseline; gap: 2px; font-size: 12px; color: var(--muted); }
+.pill b { font-size: 16px; font-weight: 600; line-height: 1; color: var(--ink); }
+.pill i { font-size: 12px; font-style: normal; margin-right: 4px; }
+.pill em { font-style: normal; font-size: 11px; margin-left: 4px; }
+.pill.full b { color: var(--gold-deep); }
+.pill.full { color: var(--gold-deep); }
+.pill.over, .pill.over b { color: var(--warn); }
+.portions { flex: none; }
+.portions { padding: 3px; }
+.portions button { flex: none; padding: 5px 11px; font-size: 12px; }
+.note { font-size: 12px; color: var(--muted); }
+.tray.over .note { color: var(--warn); }
+.chips { display: grid; gap: 4px; cursor: pointer; }
+.chips p { margin: 0; display: grid; grid-template-columns: minmax(30px, auto) minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.chips p b { font-weight: 400; white-space: nowrap; }
+.chips p b i { font-style: normal; font-size: 11px; color: var(--gold-deep); }
+.chips p span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chips p span em { font-style: normal; font-size: 11px; color: var(--gold-deep); margin-right: 4px; }
+.chips p.cur { color: var(--ink); }
+.chips p.cur b { font-weight: 600; }
+.chips p > u { display: none; }
+/* 곁들임(소스 등 코인 없는 것): 빠뜨리지 않게 앞에 오렌지 + */
+mark { background: none; color: inherit; }
+mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right: 2px; }
+.copy { padding: 12px 20px; border-radius: 999px; background: var(--btn); color: var(--btn-ink); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; }
+.copy:disabled, .shr:disabled { opacity: .3; cursor: default; }
+.trow .copy.shico { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+.shico svg { width: 15px; height: 17px; margin-top: -1px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.shwrap { position: relative; }
+.shmenu { position: absolute; right: 0; bottom: calc(100% + 8px); min-width: 148px; background: var(--tile); border-radius: 14px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29,27,20,.18); overflow: hidden; display: grid; z-index: 2; }
+.shmenu button { padding: 13px 16px; font-size: 14px; font-weight: 400; text-align: left; white-space: nowrap; }
+.shmenu button + button { border-top: .5px solid var(--line); }
+.shr { width: 44px; height: 44px; border-radius: 50%; background: var(--well); display: grid; place-items: center; color: var(--ink); margin-right: -4px; }
+.shr svg { width: 16px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.sheet .shot { display: block; width: 100%; border-radius: 14px; box-shadow: 0 0 0 .5px var(--line); margin-top: 12px; -webkit-touch-callout: default; }
+.sheet .shotnote { font-size: 12px; color: var(--muted); margin: 12px 0 0; text-align: center; }
+#fallback { width: 100%; height: 120px; font: 13px var(--sans); }
+
+/* sheet */
+.sheet { position: fixed; inset: 0; z-index: 9; display: grid; align-items: end; }
+.sheet[hidden] { display: none; }
+/* 사진: 작은 미리보기 → 누르면 크게 */
+.ph { display: block; width: 38px; height: 38px; border-radius: 9px; overflow: hidden; background: var(--well); flex: none; }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.tile .add .ph, .radd .ph { pointer-events: auto; cursor: pointer; }
+.nrow { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.nrow .name { min-width: 0; }
+.photo { position: fixed; inset: 0; z-index: 12; background: rgba(20, 18, 8, .82); display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px; width: 100%; height: 100%; }
+.photo[hidden] { display: none; }
+.photo img { max-width: min(92vw, 560px); max-height: 72vh; border-radius: 14px; background: #fff; pointer-events: none; }
+.photo span { color: #fff; font-size: 15px; font-weight: 600; text-align: center; pointer-events: none; }
+.sheet .scrim { position: absolute; inset: 0; width: 100%; height: 100%; background: rgba(20, 18, 8, .4); }
+.sheet .panel { position: relative; background: var(--page); border-radius: 14px 14px 0 0; max-height: 76vh; overflow-y: auto; overscroll-behavior: contain; padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 8px; }
+.sheet .sh { display: flex; justify-content: space-between; align-items: center; }
+.sheet .sh b { font: 600 11px var(--mono); }
+.sheet .sh button { width: 30px; height: 30px; border-radius: 50%; background: var(--well); display: grid; place-items: center; color: var(--muted); }
+.sheet .sh svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; pointer-events: none; }
+/* 곁들임은 윗줄 메뉴에 딸린 것 — 구분선 없이 들여쓴다 */
+.sheet .rows li.tied::before { display: none; }
+.sheet .rows li.tied { min-height: 40px; margin-top: -4px; }
+.sheet .rows li.tied .sname { color: var(--muted); }
+.sheet h3 { margin: 16px 0 8px; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
+.sheet h3 span i { font-style: normal; font-size: 11px; color: var(--gold-deep); margin-left: 4px; }
+.sheet h3 em { font-style: normal; font-weight: 400; color: var(--muted); margin-left: 8px; }
+.sheet .rows li { grid-template-columns: 22px minmax(0, 1fr) auto 36px; column-gap: 12px; min-height: 52px; align-items: start; }
+.sheet .rows li > .rq, .sheet .rows li > .del, .sheet .rows li > .gst, .sheet .rows li > .lnk { align-self: center; }
+.sheet .rows li > .rq { margin-right: -12px; }
+.gchk { width: 22px; height: 22px; margin-top: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); display: grid; place-items: center; }
+.gchk svg { width: 12px; height: 12px; fill: none; stroke: var(--btn-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0; pointer-events: none; }
+.gchk[aria-pressed="true"] { background: var(--btn); box-shadow: none; }
+.gchk.sw[aria-pressed="true"] { background: var(--heart); }
+.gchk[aria-pressed="true"] svg { opacity: 1; }
+.gsp { width: 22px; }
+.fold .fold-t { text-transform: uppercase; letter-spacing: .06em; }
+.sheet .rows.rated li { display: block; min-height: 0; padding: 9px 8px 9px 16px; }
+.rows.rated .sbody { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; }
+.rows.rated .sname { min-width: 0; }
+.rows.rated .stars { margin: 0; flex: none; }
+.stars { display: flex; gap: 0; margin: 6px 0 0 -5px; }
+.stars button { width: 28px; height: 26px; display: grid; place-items: center; color: var(--line); }
+.stars button[aria-pressed="true"] { color: var(--coin-pick); }
+.stars svg { width: 16px; height: 16px; fill: currentColor; pointer-events: none; }
+.sbody { display: grid; min-width: 0; padding: 14px 0; gap: 6px; }
+.sheet .sbody .sname { padding: 0; }
+.lnk { justify-self: start; font-size: 11px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+.swp { display: flex; align-items: center; gap: 10px; }
+.swapin { flex: 1; min-width: 0; padding: 8px 10px; border: 0; border-radius: 9px; background: var(--page); color: var(--ink); font: 400 14px var(--sans); box-shadow: inset 0 0 0 .5px var(--line); }
+.gst { font-size: 11px; color: var(--muted); padding-right: 4px; white-space: nowrap; }
+.sheet .rows li.got .sname > span:first-child { color: var(--muted); }
+.sheet .rows li.tied .sbody { padding-top: 0; }
+.ssub { font-size: 11px; color: var(--muted); }
+.xq { font-style: normal; font-size: 11px; font-weight: 600; color: var(--gold-deep); background: var(--soft); border-radius: 999px; padding: 2px 7px; margin-left: 4px; }
+.stockp .rows li { grid-template-columns: 22px minmax(0, 1fr) auto; padding-right: 16px; }
+.stockp .gh { margin: 16px 0 8px; }
+.rows.faded .sname { color: var(--muted); }
+
+
+.sheet .sname { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 12px 14px 0; font-size: 14px; font-weight: 400; }
+.sheet .sname span:first-child { overflow-wrap: anywhere; }
+.sheet .sname .coin i { width: 7px; height: 7px; }
+.sheet .del { width: 36px; height: 44px; color: var(--muted); font: 400 17px/1 var(--sans); text-align: center; }
+.sheet .gh { margin: 16px 0 8px; }
+.sheet .fin { margin-left: auto; margin-right: 12px; font-size: 11px; font-weight: 600; color: var(--gold-deep); }
+.rows.fin .gchk { opacity: .55; }
+.rows.fin .rq, .rows.fin .del { display: none; }
+.fbar { position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom, 0px)); margin: 20px -16px 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--page); border-top: .5px solid var(--line); display: grid; gap: 8px; }
+.fbar .copy { width: 100%; }
+.fbar p { margin: 0; text-align: center; font-size: 11px; color: var(--muted); }
+.sheet .memo { width: 100%; margin-top: 0; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 14px var(--sans); }
+.sheet .memo::placeholder { color: var(--muted); }
+.sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
+.sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
+.sheet h3 .ate { margin-left: auto; margin-right: 12px; padding: 4px 10px; border-radius: 999px; background: var(--well); color: var(--ink); font-size: 11px; font-weight: 600; }
+.sheet h3 .ate[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
+.sheet .join { display: flex; justify-content: center; margin: 16px 0 -4px; }
+.sheet .join .sg button { padding: 5px 12px; }
+.sheet .none { color: var(--muted); font-size: 12px; padding: 16px 0; margin: 0; }
+.clr { font-size: 12px; font-weight: 400; color: var(--gold-deep); }
+.toast { position: fixed; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 13px; z-index: 8; white-space: nowrap; }
+</style>
+
+<div class="top">
+<header class="band">
+  <div class="gutter">
+    <div class="util"><b class="ptitle" id="ptitle" hidden></b><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="utilr"><i class="live" id="live" hidden role="status" aria-label="다른 기기에서도 보고 있어요"></i><button id="stamp" aria-label="메뉴 새로 가져오기"></button></span></div>
+    <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
+  </div>
+</header>
+<nav class="rail" aria-label="카테고리"><div class="gutter"><div class="rs" id="rail"></div></div></nav>
+</div>
+<main><div class="gutter"><div class="sheet page" id="page" hidden></div><div id="list"><div class="empty">메뉴를 불러오는 중입니다.</div></div></div></main>
+
+<div class="tray" id="tray" hidden>
+  <div class="gutter">
+    <div class="tally">
+      <div class="tl"><div class="nums" id="nums" hidden></div><div class="meter" id="meter"></div></div>
+      <div class="portions sg" id="portions" aria-label="추가취식">
+        <button data-portion="1">기본</button><button data-portion="2">+1</button><button data-portion="3">+2</button>
+      </div>
+    </div>
+    <div class="note" id="note" hidden></div>
+  </div>
+</div>
+<nav class="nav" id="nav" aria-label="화면"></nav>
+<textarea id="fallback" hidden aria-label="복사할 내용"></textarea>
+<div class="sheet" id="sheet" hidden></div>
+<button class="photo" id="photo" hidden aria-label="사진 닫기"></button>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const PROJECT = "omigzdxdxywtjsfzimks";
+const MEALS = { "1": "아침", "3": "저녁" };
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
+  select restaurant_code r, restaurant_name rn, menu_dt d, meal m, course c, course_type ct, name n, coin, round(kcal) k, handmade hm, tag tg, photo p, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') u
+  from welstory.menu_item
+  where takeout and meal in ('1','3') and restaurant_code <> 'CAF05'
+    and menu_dt >= to_char(now() at time zone 'Asia/Seoul', 'YYYYMMDD')
+  order by menu_dt, meal, course, course_type, seq) t`;
+const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
+
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, tab: (() => { try { return ["menu", "cart", "stock", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+let docRef = null, saveTimer = null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const keyOf = (d, m, r = S.rest) => `${r}|${d}-${m}`;
+const restName = (id) => S.rests.find((x) => x.id === id)?.name || id;
+const ymd = (d) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)));
+const dateLabel = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)} ${WD[ymd(d).getUTCDay()]}`;
+const todayYmd = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, "");
+
+// execute_sql 은 안내문 + <untrusted-data-…> 경계 안의 JSON 배열로 결과를 돌려준다
+function parsePayload(p, depth = 0) {
+  if (Array.isArray(p)) return p[0]?.j ?? p;
+  if (p && typeof p === "object") return typeof p.result === "string" ? parsePayload(p.result, depth + 1) : (p.j ?? []);
+  const s = String(p ?? "").trim();
+  const m = s.match(/<untrusted-data-[^>]*>\s*(\[[\s\S]*\])\s*<\/untrusted-data/);
+  if (m) return parsePayload(JSON.parse(m[1]), depth + 1);
+  if (depth < 3 && /^[\[{]/.test(s)) return parsePayload(JSON.parse(s), depth + 1);
+  throw new Error("unexpected result");
+}
+
+// ---------- items ----------
+const NOODLE = /라면|면$|면,|우동|짬뽕|짜장|컵누들|토핑|볶음면|국수/;
+const RICE = /햇반|밥|죽|김밥|덮밥|국$|국밥|해장국|시리얼|삼각|절편/;
+function catName(course, names) {
+  const c = course.replace(/^T\/O\s*/, "").trim();
+  if (c !== "컵푸드") return c;
+  const nd = names.filter((n) => NOODLE.test(n)).length, rc = names.filter((n) => RICE.test(n)).length;
+  if (nd >= names.length * .5) return "컵라면";
+  if (rc >= names.length * .5) return "밥·죽";
+  return "간식·요거트";
+}
+// 간식 묶음에 섞여 들어온 생과일은 '과일'로 옮긴다 (젤리·주스·말랭이·요거트 같은 가공품은 그대로)
+const FRUIT = /오렌지|자몽|감귤|귤$|사과|바나나|방울토마토|토마토|단감|키위|포도|샤인머스캣|블루베리|딸기|망고|파인애플|멜론|수박|복숭아|자두|체리|용과|황금향|한라봉|천혜향|과일|과채/;
+const NOT_FRUIT = /젤리|주스|즙|드링크|요거|요구르트|말랭이|칩|맛$|빵|베이글|머핀|스콘|쿠키|크래커|와플|도넛|크루아상|크로와상|마들렌|휘낭시에|떡|롤|그래놀라|시리얼|초코|푸딩|라떼|콤부차|워터|티$|케이크|케익|스무디|에이드|잼|샐러드|샌드위치|우유|두유|쉐이크|바$|파이|타르트|스프|파스타|소스/;
+const fruitFix = (cat, name) => (/간식|기타|컵푸드|사이드/.test(cat) && FRUIT.test(name) && !NOT_FRUIT.test(name) ? "과일" : cat);
+// 간식·사이드 묶음에 섞여 나온 빵은 '빵'으로 옮긴다
+const BREAD = /베이글|머핀|스콘|크루아상|크로와상|소금빵|깜빠뉴|식빵|모닝빵|치아바타|브리오슈/;
+const breadFix = (cat, name) => (/간식|기타|컵푸드|사이드/.test(cat) && BREAD.test(name) && !/샌드위치|칩|맛\)?$/.test(name) ? "빵" : cat);
+// 간식·밥 묶음에 섞여 나온 떡은 '떡'으로 옮긴다 (떡볶이·떡국·호떡·인절미맛 과자는 그대로)
+const TTEOK = /시루떡|가래떡|찹쌀떡|인절미|절편|설기|송편|경단|약과|떡$|떡\s*\(/;
+const NOT_TTEOK = /떡볶이|떡국|떡갈비|호떡|맛탕|맛\)?$|롤|빵|바$|김밥|칩/;
+const tteokFix = (cat, name) => (/간식|기타|컵푸드|사이드|밥·죽/.test(cat) && TTEOK.test(name) && !NOT_TTEOK.test(name) ? "떡" : cat);
+// PlanEAT 사진: 묶음의 대표 메뉴에만 있다. 외부 이미지를 막는 화면(아티팩트)에서는 한 장 시험해 보고 조용히 끈다.
+const PHOTO_BASE = "https://m.planeatchoice.net";
+const thumbOf = (p) => PHOTO_BASE + p.replace(/\/([^/]+)$/, "/thumb/$1");
+function probePhotos(p) {
+  if (S.photoProbe || !p) return; S.photoProbe = true;
+  const im = new Image(); im.onload = () => { S.canPhoto = true; render(); }; im.src = thumbOf(p);
+}
+const photoBtn = (it) => (S.canPhoto && it.photo ? `<span class="ph" role="button" data-photo="${esc(it.name)}" aria-label="${esc(it.name)} 사진"><img loading="lazy" alt="" src="${esc(thumbOf(it.photo))}"></span>` : "");
+const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
+const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
+const MINUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7"/></svg>', PLUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7M6 2.500v7"/></svg>';
+const won = (it) => (it?.price ? `${it.est ? "약\u00a0" : ""}${it.price.toLocaleString("ko-KR")}\u2060원` : "");
+const SOLD = /^[*\s\[(]*품절[\])\s:·-]*/;
+const soldChip = (it) => (it?.sold ? '<i class="sold">품절</i>' : "");
+const cache = new Map();
+function itemsFor(d, m, rid = S.rest) {
+  const k = keyOf(d, m, rid);
+  if (cache.has(k)) return cache.get(k);
+  const groups = new Map();
+  for (const r of S.rows) {
+    if (r.d !== d || r.m !== m || r.r !== rid) continue;
+    if (r.coin == null && !/음료/.test(r.c) && /\d+\s*종\s*$/.test(r.n)) continue; // "○○ 10종" 같은 묶음 제목
+    const g = `${r.c}|${r.ct}`;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(r);
+  }
+  const seen = new Map();
+  for (const rows of groups.values()) {
+    const cat = /음료/.test(rows[0].c) ? "음료" : catName(rows[0].c, rows.map((r) => r.n));
+    for (const r of rows) {
+      // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
+      const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
+      if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
+      seen.set(nm, { name: nm, sold, cat: r.pc && CAT_ORDER.includes(r.pc) && cat !== "음료" && cat !== "냉동" && r.pc !== "음료" && r.pc !== "냉동" ? r.pc : breadFix(tteokFix(fruitFix(cat, nm), nm), nm), price: r.pr > 0 ? r.pr : null, est: r.ps === "est", coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+    }
+  }
+  const list = [...seen.values()];
+  cache.set(k, list);
+  return list;
+}
+// ---------- 픽업 체크와 재고 ----------
+// picks[k].got[name] = "ok"(가져옴) | "swap"(다른 걸로 바꿈). 가져온 것은 S.stock(집에 있는 것)에 올라가고, 먹었다고 체크하면 빠진다.
+function unGot(k, name) {
+  const p = S.picks[k];
+  if (p?.got) delete p.got[name];
+  if (p?.swapTo) delete p.swapTo[name];
+  S.stock = S.stock.filter((e) => e.src !== `${k}|${name}`);
+  if (p && !Object.keys(p.got || {}).length) p.done = false;
+}
+const unGotAll = (k) => { for (const n of Object.keys(S.picks[k]?.got || {})) unGot(k, n); };
+function setGot(k, name, state) { // 표시만 한다 — 재고와 횟수는 "테이크아웃 완료"를 눌러야 반영된다
+  unGot(k, name);
+  const p = S.picks[k]; if (!state || !p?.items?.[name]) return;
+  (p.got || (p.got = {}))[name] = state;
+}
+// 확정: 그 날짜에 체크해 둔 것을 재고에 올리고 끼니를 잠근다
+const pendingKeys = (d) => Object.keys(S.picks).filter((k) => k.split("|")[1].slice(0, 8) === d && !S.picks[k].done && Object.keys(S.picks[k].got || {}).length);
+function commitDay(d) {
+  for (const k of pendingKeys(d)) {
+    const p = S.picks[k], [r, dm] = k.split("|"), m = dm.slice(9), items = itemsFor(d, m, r);
+    for (const [name, state] of Object.entries(p.got)) {
+      const it = items.find((x) => x.name === name);
+      if (!p.items?.[name] || (it && isSide(it))) continue; // 소스 같은 곁들임은 재고로 세지 않는다
+      S.stock.push({ src: `${k}|${name}`, n: state === "swap" ? (p.swapTo?.[name] || "").trim() : name, from: state === "swap" ? name : null, q: p.items[name], d, m,
+        r: S.rests.find((x) => x.id === r)?.name || r, fz: it?.cat === "냉동", t: Date.now() });
+    }
+    p.done = true;
+    p.val = Object.fromEntries(items.filter((x) => x.price && p.items?.[x.name]).map((x) => [x.name, x.price])); p.paid = (portionsOf(k) - 1) * EXTRA_FEE;
+    // 끝난 끼니는 카트에서 빼고 기록으로만 남긴다(횟수 세기용). 같은 끼니를 다시 담으면 새로 시작한다.
+    S.picks[`${k}#${Date.now().toString(36)}`] = p; delete S.picks[k];
+  }
+}
+// 예전 방식으로 카트에 남아 있던 완료 끼니도 기록으로 옮긴다
+function archiveDone() { for (const k of Object.keys(S.picks)) if (S.picks[k]?.done && !k.includes("#")) { S.picks[`${k}#old`] = S.picks[k]; delete S.picks[k]; } }
+function uncommit(k) { const p = S.picks[k]; if (!p) return; S.stock = S.stock.filter((e) => !e.src.startsWith(`${k}|`)); p.done = false; }
+const stockName = (e) => e.n || `${e.from} 대신 가져온 것`;
+const stockCount = () => S.stock.reduce((a, e) => a + (e.q || 1), 0);
+// 먹은 횟수: 픽업 체크가 있는 끼니는 실제로 가져온 것만 센다. 체크가 없으면 보낸 것을 세되,
+// 한 끼니에 두 곳을 '또는/순위'로 걸었으면 고른 쪽만 센다.
+function counts(k) {
+  const [r, dm] = k.split("|");
+  const rivals = Object.keys(S.picks).filter((o) => o.split("|")[0] !== r && o.split("|")[1].split("#")[0] === dm && Object.keys(S.picks[o]?.items || {}).length);
+  if (!rivals.length || (S.mode[dm] || "or") === "and") return true;
+  if (rivals.some((o) => S.picks[o]?.done)) return false; // 다른 쪽을 가져왔다
+  return S.ate[dm] === r;
+}
+function freq() {
+  const f = {};
+  for (const [k, p] of Object.entries(S.picks)) {
+    const got = p.got || {};
+    if (p.done) { for (const [n, st] of Object.entries(got)) if (st === "ok" && p.items?.[n]) f[n] = (f[n] || 0) + 1; }
+    else if (p.sent && counts(k)) for (const n of Object.keys(p.items || {})) f[n] = (f[n] || 0) + 1;
+  }
+  return f;
+}
+const portionsOf = (k) => { const v = S.portions[k]; return v === true ? 2 : (v || 1); };
+
+// ---------- budget: 1인분 = 4코인 + 음료 1, 4코인을 넘긴 만큼 음료 자리를 쓰고 그 음료는 지정 ----------
+function budget(items, sel, n) {
+  let coins = 0, drinks = 0, unknown = 0, pickIn = false;
+  for (const it of items) {
+    const q = sel[it.name] || 0;
+    if (!q) continue;
+    if (/pick/i.test(it.tag || "")) pickIn = true;
+    if (it.drink) drinks += q; else if (it.coin == null) unknown += q; else coins += it.coin * q;
+  }
+  const base = 4 * n, cap = pickIn ? base : 5 * n; // Pick(3코인)은 사이드 하나와 짝 — 5코인째(지정 음료)는 없다
+  const fixed = Math.min(n, Math.max(0, coins - base));
+  const drinkMax = n - fixed;
+  return { coins, drinks, unknown, pickIn, base, cap, fixed, drinkMax, over: coins > cap || drinks > drinkMax };
+}
+
+// ---------- persistence (this viewer only) ----------
+// 지난 날짜의 순위·메모는 버린다
+const pruned = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k, v]) => v && k.slice(0, 8) >= todayYmd()));
+// 그 끼니에 담은 식당들 — 1순위로 고른 곳이 먼저
+function pickedRests(d, m) {
+  const l = S.rests.filter((x) => Object.keys(S.picks[keyOf(d, m, x.id)]?.items || {}).length);
+  const first = S.rank[`${d}-${m}`];
+  return l.sort((a, b) => (b.id === first) - (a.id === first));
+}
+// 한 끼니에 두 곳을 담았을 때의 관계: or(둘 중 하나, 기본) · rank(순위) · and(둘 다)
+const modeOf = (d, m) => S.mode[`${d}-${m}`] || "or";
+const JOIN = { or: "또는", rank: "또는", and: "그리고" };
+// 관계·먹은 곳은 기록(picks)이 남아 있는 끼니 것만 둔다 — 횟수를 셀 때 필요하다
+const kept = (o, keys) => { const live = new Set(keys.map((k) => k.split("|")[1])); return Object.fromEntries(Object.entries(o || {}).filter(([k, v]) => v && live.has(k))); };
+// ---------- 저장: 둘이 같은 데이터를 쓴다 ----------
+// 통째로 덮어쓰면 상대가 그사이 고친 것이 지워지므로, 저장 직전과 화면으로 돌아올 때 서버 것을 읽어 와 합친다.
+// 규칙(항목별 3자 병합): 내가 마지막으로 맞춘 뒤(base) 내 쪽에서 바뀐 항목은 내 것, 안 바뀐 항목은 서버 것.
+let base = {};
+const J = (v) => JSON.stringify(v ?? null);
+const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
+function snapshot() {
+  const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
+  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions });
+}
+// 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
+const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
+const norm = (v) => { v = clone(v) || {}; v.picks = mig(v.picks); v.portions = mig(v.portions || v.extra); delete v.extra; return v; };
+function merge3(b, mine, theirs) {
+  const out = { ...theirs, view: mine.view, rest: mine.rest }; // 보기·식당 탭은 기기마다 제 것을 쓴다
+  for (const f of ["picks", "portions", "rank", "mode", "ate", "memo", "rate"]) {
+    const B = b[f] || {}, M = mine[f] || {}, T = theirs[f] || {}, o = {};
+    for (const k of new Set([...Object.keys(M), ...Object.keys(T)])) { const v = J(M[k]) !== J(B[k]) ? M[k] : T[k]; if (v !== undefined) o[k] = v; }
+    out[f] = o;
+  }
+  for (const f of ["fav", "hide", "hideCats"]) {
+    const B = new Set(b[f] || []), M = new Set(mine[f] || []), T = new Set(theirs[f] || []);
+    out[f] = [...new Set([...M, ...T])].filter((x) => (M.has(x) !== B.has(x) ? M.has(x) : T.has(x)));
+  }
+  { const id = (e) => e.src || `${e.n}|${e.t}`, idx = (l) => new Map((l || []).map((e) => [id(e), e]));
+    const B = idx(b.stock), M = idx(mine.stock), T = idx(theirs.stock), o = [];
+    for (const k of new Set([...M.keys(), ...T.keys()])) { const v = J(M.get(k)) !== J(B.get(k)) ? M.get(k) : T.get(k); if (v) o.push(v); }
+    out.stock = o.sort((x, y) => (x.t || 0) - (y.t || 0)); }
+  for (const f of ["eaten", "noPick"]) out[f] = J(mine[f]) !== J(b[f]) ? mine[f] : theirs[f];
+  return out;
+}
+function applyState(v) {
+  S.fav = new Set(v.fav || []); S.picks = v.picks || {}; S.portions = v.portions || {};
+  if (v.rest) S.rest = v.rest;
+  S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock : []; S.eaten = Array.isArray(v.eaten) ? v.eaten : [];
+  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.rate = v.rate || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+  archiveDone();
+}
+const remoteState = async () => { const snap = await docRef.get(); return snap.exists ? norm(snap.data()) : null; };
+function save() {
+  if (!docRef) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    saveTimer = null;
+    try {
+      const mine = snapshot(), theirs = await remoteState();
+      const merged = theirs ? merge3(base, mine, theirs) : mine;
+      if (saveTimer) return; // 읽는 사이 또 고쳤다 — 다음 저장이 이어서 합친다
+      if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) render(); }
+      await docRef.set(merged); base = merged;
+    } catch (e) { console.warn(e); }
+  }, 700);
+}
+// 화면으로 돌아올 때: 상대가 고친 것을 받아 온다
+async function pull() {
+  if (!docRef || saveTimer || S.pulling) return;
+  S.pulling = true;
+  try {
+    const theirs = await remoteState(); if (!theirs || saveTimer) return;
+    const mine = snapshot(), merged = merge3(base, mine, theirs);
+    base = theirs;
+    if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) render(); }
+    if (J(merged) !== J(theirs)) save();
+  } catch (e) { console.warn(e); } finally { S.pulling = false; }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); beat(); } });
+// 동시 접속: 열려 있는 동안 20초마다 알리고, 다른 기기도 열려 있으면 점을 깜박이며 그쪽 변경을 바로 받아 온다
+let devId = "";
+try { devId = localStorage.getItem("takeout-dev") || ""; if (!devId) { devId = Math.random().toString(36).slice(2, 10); localStorage.setItem("takeout-dev", devId); } } catch (_) { devId = Math.random().toString(36).slice(2, 10); }
+async function beat() {
+  if (document.hidden) return;
+  try {
+    const mcp = await claude.use("mcp");
+    if (!mcp?.ping) return;
+    const others = (await mcp.ping(devId)).others > 0;
+    $("live").hidden = !others;
+    if (others) pull();
+  } catch (_) { $("live").hidden = true; }
+}
+setInterval(beat, 20_000); setTimeout(beat, 1500);
+async function initStore() {
+  try {
+    const db = await claude.use("db");
+    const user = await claude.use("user");
+    const id = user && (await user.id());
+    if (!db || !id) return;
+    docRef = db.doc(`data/users/${id}/state`);
+    const v = await remoteState();
+    if (v) {
+      base = v; applyState(clone(v));
+      if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
+      if (S.rows.length) render();
+    }
+  } catch (e) { console.warn("store", e); }
+}
+
+// 담은 것의 시중가 합계(값을 아는 것만). 추정가가 하나라도 섞이면 '약'
+function worthHtml(items, sel) {
+  let sum = 0, est = false;
+  for (const it of items) { const q = sel[it.name]; if (q && it.price) { sum += it.price * q; est = est || it.est; } }
+  return sum ? `<span class="worth">시중가 ${est ? "약 " : ""}${sum.toLocaleString("ko-KR")}원</span>` : "";
+}
+// ---------- render ----------
+function render() {
+  if (!S.rests.some((x) => x.id === S.rest)) S.rest = S.rests[0]?.id;
+  $("rests").innerHTML = S.rests.map((x) => `<button data-rest="${x.id}" aria-pressed="${x.id === S.rest}">${esc(x.name)}</button>`).join("");
+  const dates = [...new Set(S.rows.filter((r) => r.r === S.rest).map((r) => r.d))];
+  if (!dates.length) return;
+  if (!dates.includes(S.date)) S.date = dates.includes(todayYmd()) ? todayYmd() : dates[0];
+  const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.r === S.rest && r.d === S.date && r.m === m));
+  if (!meals.includes(S.meal)) S.meal = defaultMeal(meals);
+  const k = keyOf(S.date, S.meal);
+  const all = itemsFor(S.date, S.meal);
+  probePhotos(all.find((it) => it.photo)?.photo);
+  const isPick = (it) => /pick/i.test(it.tag || "");
+  const hasPick = all.some(isPick);
+  const isHidden = (it) => S.hide.has(it.name) || S.hideCats.has(it.cat);
+  const items = S.edit ? all : all.filter((it) => !isHidden(it));
+  const sel = S.picks[k]?.items || {};
+  const f = freq();
+  const n = portionsOf(k);
+  // Pick 이 끼면 4코인(×인분)을 넘길 수 없다 — 넘치는 메뉴는 비활성으로 보여준다
+  const bud = budget(all, sel, portionsOf(k));
+  S.blocked = (it) => !S.edit && !sel[it.name] && !it.drink && it.coin != null && (bud.pickIn || isPick(it)) && bud.coins + it.coin > bud.base;
+
+  {
+    // 메뉴가 있는 날만 — 숫자(선택하면 채운 원) 옆에 요일
+    const L = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], today = todayYmd();
+    $("dates").innerHTML = dates.map((d) =>
+      `<button class="day${d === today ? " today" : ""}" data-date="${d}" aria-pressed="${d === S.date}"><span class="dn">${+d.slice(6, 8)}</span><span class="wl">${L[ymd(d).getUTCDay()]}</span></button>`).join("");
+  }
+  $("meals").innerHTML = meals.map((m) => {
+    const n = Object.values(S.picks[keyOf(S.date, m)]?.items || {}).reduce((a, q) => a + q, 0);
+    return `<button data-meal="${m}" aria-pressed="${m === S.meal}">${MEALS[m]}${n ? `<span class="cnt">${n}</span>` : ""}</button>`;
+  }).join("");
+
+  // categories
+  const cats = new Map();
+  const liked = items.filter((it) => S.fav.has(it.name) || f[it.name])
+    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
+  S.combos = S.edit ? [] : combos(all.filter((it) => !isHidden(it)), f, n);
+  if (liked.length || S.combos.length) cats.set("추천", liked);
+  const hand = items.filter((it) => it.hand);
+  if (hand.length) cats.set("수제", hand);
+  const byCat = new Map();
+  for (const it of items) { if (!byCat.has(it.cat)) byCat.set(it.cat, []); byCat.get(it.cat).push(it); }
+  [...byCat.keys()].sort((a, b) => rank(a) - rank(b)).forEach((c) => cats.set(c, byCat.get(c).sort((x, y) => (x.coin ?? 9) - (y.coin ?? 9))));
+  if (!cats.has(S.cat)) S.cat = cats.keys().next().value;
+
+  $("rail").innerHTML = [...cats].map(([c, list]) => {
+    const has = list.some((it) => sel[it.name]);
+    const off = S.edit && S.hideCats.has(c);
+    return `<button data-cat="${esc(c)}" aria-pressed="${c === S.cat}" class="${has ? "has" : ""}${off ? " off" : ""}">${c === "추천" ? `${heart(true)}추천` : esc(c)}<span class="n">${list.length}</span></button>`;
+  }).join("") + `<button class="editbtn" id="edit" aria-pressed="${S.edit}">${S.edit ? "완료" : "숨기기"}</button>`;
+
+  const list = cats.get(S.cat) || [];
+  let head = "";
+  if (S.edit) {
+    const special = S.cat === "추천" || S.cat === "수제";
+    head = `<div class="editbar"><p class="hint">탭하면 숨기고, 다시 탭하면 돌아와요.</p>${special ? "" :
+      `<button class="catoff" data-hidecat="${esc(S.cat)}">${S.hideCats.has(S.cat) ? `${esc(S.cat)} 다시 보이기` : `${esc(S.cat)} 전체 숨기기`}</button>`}</div>`;
+  } else if (S.cat === "추천") {
+    head = S.combos.length ? combosHtml(S.combos, n, sel) : "";
+    head += liked.length ? foldHtml(liked, sel, f) : `<p class="hint">${heart(false)} 를 눌러두면 조합이 더 잘 맞아요.</p>`;
+  }
+  const searching = S.q != null && !S.edit;
+  const tabbed = (S.cat !== "추천" || searching) && !S.edit;
+  const ICON = { grid: '<svg viewBox="0 0 14 14"><rect x="1" y="1" width="5" height="5" rx="1.2"/><rect x="8" y="1" width="5" height="5" rx="1.2"/><rect x="1" y="8" width="5" height="5" rx="1.2"/><rect x="8" y="8" width="5" height="5" rx="1.2"/></svg>',
+    list: '<svg viewBox="0 0 14 14"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>' };
+  const other = S.view === "list" ? "grid" : "list";
+  const anyBlk = tabbed && (cats.get(S.cat) || []).some(S.blocked);
+  const note = anyBlk && bud.pickIn ? "Pick을 담아서 남은 코인에 맞는 메뉴만 고를 수 있어요" : S.cat === "수제" ? "오늘 나온 수제 메뉴예요." : "";
+  // 목록 맨 위 한 줄: 왼쪽에 안내, 오른쪽 끝에 보기 전환
+  const GLASS = '<svg class="ln" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.2"/><path d="M9.200 9.200 12.500 12.500"/></svg>';
+  const vbtn = `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
+  const legend = S.edit ? "" : searching
+    ? `<div class="viewopt"><label class="qbox">${GLASS}<input id="q" type="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="메뉴 검색" value="${esc(S.q)}"></label><button class="vbtn" data-qclose aria-label="검색 닫기"><svg class="ln" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>${vbtn}</div>`
+    : `<div class="viewopt"><span class="vnote">${tabbed ? note : ""}</span><button class="vbtn" data-qopen aria-label="메뉴 검색">${GLASS}</button>${tabbed ? vbtn : ""}</div>`;
+  const bodyOf = (l) => S.view === "list" ? listBody(l, sel, f) : `<div class="grid">${gridBody(l, sel, f, isHidden)}</div>`;
+  // 검색: 이 끼니의 모든 분류에서 이름으로 찾는다. 입력 칸은 그대로 두고 결과만 갈아 끼운다(한글 조합이 끊기지 않게).
+  S.find = (q) => { const t = q.trim().toLowerCase().replace(/\s+/g, ""); if (!t) return bodyOf(S.cat === "추천" ? [] : list);
+    const hit = items.filter((it) => it.name.toLowerCase().replace(/\s+/g, "").includes(t)).sort((a, b) => rank(a.cat) - rank(b.cat));
+    return hit.length ? bodyOf(hit) : `<p class="hint">찾는 메뉴가 없어요.</p>`; };
+  if (searching) { $("list").innerHTML = `${legend}<div id="lbody">${S.find(S.q)}</div>`; renderTray(all, sel, n); setStamp(); return; }
+  if (S.cat === "추천" && !S.edit) { $("list").innerHTML = legend + head; renderTray(all, sel, n); setStamp(); return; }
+  $("list").innerHTML = list.length || head
+    ? `${legend}${head}${tabbed && S.view === "list" ? listBody(list, sel, f) : `<div class="grid">${gridBody(list, sel, f, isHidden)}</div>`}`
+    : `<div class="empty">이 끼니엔 테이크아웃이 없어요.</div>`;
+
+  renderTray(all, sel, n);
+  setStamp();
+}
+// 각 탭: 담은 적 있거나 ☆한 메뉴를 위로, 나머지는 '새로운 메뉴'로 나눠 보여준다
+function gridBody(list, sel, f, isHidden) {
+  const draw = (l) => l.map((it) => tile(it, sel[it.name] || 0, f[it.name] || 0, isHidden(it))).join("");
+  if (S.edit) return draw(list);
+  const known = list.filter((it) => S.fav.has(it.name) || f[it.name])
+    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
+  const fresh = list.filter((it) => !known.includes(it));
+  if (!known.length || !fresh.length) return draw(known.length ? known : fresh);
+  return `<p class="gh">담은 적 있는 메뉴</p>${draw(known)}<p class="gh">새로운 메뉴</p>${draw(fresh)}`;
+}
+// 목록 한 줄: 체크 원 · 이름 + 보조 줄(코인 · 분류 · kcal) · 수량 · 하트
+function rowHtml(it, q, plain) {
+  const nm = esc(it.name);
+  const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it), S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const blk = S.blocked?.(it);
+  return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
+    <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
+      <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
+      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}${esc(sub)}</span></span>${photoBtn(it)}
+    </button>
+    <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">${PLUS}</button>` : ""}</span>
+    <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
+  </li>`;
+}
+function listBody(list, sel, f) {
+  const plain = S.cat !== "수제" && S.q == null;
+  const group = (title, l) => l.length ? `${title ? `<p class="gh">${title}</p>` : ""}<ul class="rows">${l.map((it) => rowHtml(it, sel[it.name] || 0, plain)).join("")}</ul>` : "";
+  const known = list.filter((it) => S.fav.has(it.name) || f[it.name])
+    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
+  const fresh = list.filter((it) => !known.includes(it));
+  return !known.length || !fresh.length ? group("", known.length ? known : fresh)
+    : group("담은 적 있는 메뉴", known) + group("새로운 메뉴", fresh);
+}
+const rank = (c) => { const i = CAT_ORDER.indexOf(c); return i < 0 ? 50 : i; };
+
+// ---------- 조합 제안: ☆·보낸 적 있는 메뉴·오늘의 수제로 정확히 4코인(×인분)을 맞춘다 ----------
+function combos(items, f, n) {
+  const target = 4 * n, maxSize = 3 + n;
+  // 별점: 4·5점은 담은 적이 없어도 후보에 오르고, 1·2점은 조합에서 뺀다
+  const star = (it) => { const r = S.rate[it.name]; return r ? (r - 3) * 1.5 : 0; };
+  const score = (it) => (S.fav.has(it.name) ? 3 : 0) + Math.min(f[it.name] || 0, 5) * .8 + (it.hand ? 1.2 : 0) + star(it);
+  const pool = items.filter((it) => !it.drink && it.coin >= 1 && it.coin <= target && !(S.rate[it.name] <= 2) && score(it) > 0)
+    .map((it) => ({ it, s: score(it) })).sort((a, b) => b.s - a.s).slice(0, 16);
+  const found = [];
+  (function dfs(i, pick, sum) {
+    if (sum === target && pick.length) {
+      const cats = new Set(pick.map((p) => p.it.cat));
+      found.push({ items: pick.map((p) => p.it), score: pick.reduce((a, p) => a + p.s, 0) + cats.size * .6 - (pick.length - cats.size) * .8 });
+      return;
+    }
+    if (sum >= target || pick.length >= maxSize || found.length > 4000) return;
+    for (let j = i; j < pool.length; j++) if (sum + pool[j].it.coin <= target) dfs(j + 1, [...pick, pool[j]], sum + pool[j].it.coin);
+  })(0, [], 0);
+  found.sort((a, b) => b.score - a.score);
+  const out = [];
+  for (const c of found) {
+    const names = new Set(c.items.map((x) => x.name));
+    const similar = out.some((o) => o.items.filter((x) => names.has(x.name)).length >= Math.max(1, c.items.length - 1));
+    if (!similar) out.push(c);
+    if (out.length === 3) break;
+  }
+  const drinks = items.filter((it) => it.drink)
+    .map((it) => ({ it, s: (S.fav.has(it.name) ? 3 : 0) + (f[it.name] || 0) + star(it) })).filter((d) => d.s > 0 && !(S.rate[d.it.name] <= 2)).sort((a, b) => b.s - a.s);
+  const drink = drinks[0]?.it || null;
+  return out.map((c) => ({ ...c, drink }));
+}
+// ☆·보낸 메뉴는 조합이 이미 쓰고 있으니 기본은 접어두고, 펼치면 한 줄짜리 목록으로 보여준다
+function foldHtml(list, sel, f) {
+  const rows = list.map((it) => rowHtml(it, sel[it.name] || 0, false)).join("");
+  return `<section class="fold">
+    <button class="fold-h" id="fold" aria-expanded="${!!S.foldOpen}"><span class="fold-t">Recent Favorites</span><span class="n">${list.length} ${S.foldOpen ? "−" : "+"}</span></button>
+    ${S.foldOpen ? `<ul class="rows">${rows}</ul>` : ""}
+  </section>`;
+}
+const comboOn = (c, sel) => { const need = {}; for (const it of c.items) need[it.name] = (need[it.name] || 0) + 1; return Object.entries(need).every(([nm, q]) => (sel[nm] || 0) >= q); };
+function combosHtml(list, n, sel = {}) {
+  return `<div class="combos">${list.map((c, i) => `
+    <button class="combo" data-combo="${i}" aria-pressed="${comboOn(c, sel)}">
+      <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
+      <span class="combo-b">
+        <span class="combo-h"><b>Combo ${i + 1}</b><span>${4 * n}코인${c.drink ? ` + 음료 ${n}` : ""}</span></span>
+        ${c.items.map((it) => `<span class="ci"><span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${"<i></i>".repeat(it.coin)}</span><span>${esc(it.name)}</span></span>`).join("")}
+        ${c.drink ? `<span class="ci"><span class="coin" aria-label="음료"><i class="o"></i></span><span>${esc(c.drink.name)}${n > 1 ? ` ×${n}` : ""}</span></span>` : ""}
+      </span>
+    </button>`).join("")}</div>`;
+}
+function defaultMeal(meals) {
+  const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
+  return meals.includes("3") && h >= 9 && h < 20 ? "3" : meals[0];
+}
+function tile(it, q, times, hidden) {
+  const n = esc(it.name);
+  if (S.edit) {
+    const dots = it.drink ? `<span class="coin" aria-label="음료"><i class="o"></i></span>` : it.coin ? `<span class="coin">${"<i></i>".repeat(it.coin)}</span>` : `<span class="coin"><span class="v side">곁들임</span></span>`;
+    return `<div class="tile${hidden ? " muted" : ""}">
+      <button class="add" data-hide="${n}" aria-pressed="${hidden}" aria-label="${n} ${hidden ? "다시 보이기" : "숨기기"}">${dots}<span class="name">${n}</span><span class="meta"><span>${hidden ? "숨김" : "보임"}</span></span></button>
+    </div>`;
+  }
+  // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
+  const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" || S.q != null ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it), S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const blk = S.blocked?.(it);
+  return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
+    <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
+      <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
+      <span class="nrow">${photoBtn(it)}<span class="name">${soldChip(it)}${n}</span></span>
+      <span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span>${esc(sub)}</span></span>
+    </button>
+    <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
+    ${q ? `<span class="rq"><button data-sub="${n}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${n}" aria-label="하나 더">${PLUS}</button></span>` : ""}
+  </div>`;
+}
+function renderTray(items, sel, n) {
+  const b = budget(items, sel, n);
+  $("tray").hidden = false;
+  $("tray").classList.toggle("over", b.over);
+  $("nums").innerHTML = "";
+  $("meter").setAttribute("aria-label", `${b.coins}/${b.base}코인, 음료 ${b.drinks}/${b.drinkMax}`);
+  document.querySelectorAll("[data-portion]").forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.portion === n)));
+
+  // 미터: 기본/+1/+2 와 같은 높이의 칩 두 개. 다 채우면 채운 칩, 넘치면 경고색
+  const st = (v, max, over) => over ? "over" : v === 0 ? "" : v >= max ? "full" : "part";
+  const coinCls = st(b.coins, b.base, b.coins > b.cap);
+  const drinkCls = st(b.drinks, b.drinkMax, b.drinks > b.drinkMax);
+  $("meter").innerHTML =
+    `<span class="pill ${coinCls}"><b>${b.coins}</b><i>/${b.base}</i>코인</span>` +
+    `<span class="pill ${drinkCls}"><b>${b.drinks}</b><i>/${b.drinkMax}</i>음료${b.fixed ? `<em>+지정 ${b.fixed}</em>` : ""}</span>` + worthHtml(items, sel);
+
+  const notes = [];
+  if (b.coins > b.cap) notes.push(b.pickIn ? `Pick을 담으면 ${b.cap}코인까지예요` : `${b.cap}코인을 넘었습니다`);
+  else if (b.drinks > b.drinkMax) notes.push(`고를 수 있는 음료는 ${b.drinkMax}개입니다`);
+  else if (b.fixed) notes.push(`음료 ${b.fixed}개는 지정 음료로 나옵니다`);
+  const cnt = Object.values(sel).reduce((a, q) => a + q, 0);
+  const noteText = notes.join(" · ");
+  $("note").textContent = noteText;
+  $("note").hidden = !noteText;
+  renderNav();
+  renderSheet();
+}
+// 아래 내비와 탭별 헤더
+const NAV = [
+  ["menu", "Menu", '<path d="M5 6.500h14M5 12h14M5 17.500h9"/>'],
+  ["cart", "Cart", '<path d="M4 5h2l1.600 9.500h10L19.500 8H7"/><circle cx="9" cy="18.500" r="1.200"/><circle cx="16.500" cy="18.500" r="1.200"/>'],
+  ["stock", "Stock", '<path d="M4.500 8.500 12 5l7.500 3.500v7L12 19l-7.500-3.500zM4.500 8.500 12 12l7.500-3.500M12 12v7"/>'],
+  ["report", "Report", '<path d="M6 18.500V13M12 18.500V6M18 18.500v-8"/>'],
+];
+function renderNav() {
+  const cartN = Object.keys(S.picks).filter((kk) => !kk.includes("#") && kk.split("|")[1].slice(0, 8) === S.date).reduce((a, kk) => a + Object.values(S.picks[kk].items || {}).reduce((x, q) => x + q, 0), 0);
+  const cnt = { cart: cartN, stock: stockCount() };
+  $("nav").innerHTML = NAV.map(([v, t, d]) => `<button data-nav="${v}" aria-pressed="${S.tab === v}"><svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>${t}${cnt[v] ? `<span class="cnt">${cnt[v]}</span>` : ""}</button>`).join("");
+  document.body.className = `tab-${S.tab}`;
+  $("ptitle").hidden = S.tab === "menu"; $("ptitle").textContent = S.tab;
+}
+// 담은 것을 진열대 순서로, 곁들임(소스 등)은 같은 분류의 메뉴 바로 뒤에 붙인다
+const isSide = (it) => it && !it.drink && it.coin == null;
+function ordered(sel, by) {
+  return Object.entries(sel).map(([name, q], i) => ({ name, q, it: by[name], i }))
+    .sort((a, b) => (rank(a.it?.cat) - rank(b.it?.cat)) || (isSide(a.it) - isSide(b.it)) || (a.i - b.i));
+}
+const dayLabel = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)} ${WD[ymd(d).getUTCDay()]}`;
+// 재고: 가져와서 아직 안 먹은 것. 오래된 것부터.
+const STAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.800l1.900 3.900 4.300.600-3.100 3 .700 4.300L8 11.600l-3.800 2 .700-4.300-3.100-3 4.300-.600z"/></svg>';
+const starsHtml = (name) => { const r = S.rate[name] || 0; return `<span class="stars" role="group" aria-label="별점">${[1, 2, 3, 4, 5].map((v) => `<button data-rate="${esc(name)}" data-v="${v}" aria-pressed="${v <= r}" aria-label="${v}점">${STAR}</button>`).join("")}</span>`; };
+function renderStock(el) {
+  const today = ymd(todayYmd());
+  const rows = [...S.stock].sort((a, b) => a.d.localeCompare(b.d) || (a.t || 0) - (b.t || 0)).map((e) => {
+    const days = Math.round((today - ymd(e.d)) / 864e5);
+    const sub = [dayLabel(e.d), MEALS[e.m], e.r, days > 0 ? `${days}일째` : "오늘", e.fz ? "Frozen" : "", e.from && e.n ? `${e.from} 대신` : ""].filter(Boolean).join(" · ");
+    return `<li><button class="gchk" data-eat="${esc(e.src)}" aria-label="먹었어요"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></button>
+      <span class="sbody"><span class="sname"><span>${esc(stockName(e))}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
+  }).join("");
+  const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span>${starsHtml(stockName(e))}</span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">되돌리기</button></li>`).join("");
+  // 별점을 매긴 메뉴 모두: 높은 점수부터. 펼친 동안에는 순서를 그대로 둬서 고치는 중에 줄이 튀지 않게 한다
+  const names = Object.keys(S.rate);
+  if (!S.rateOpen || !S.rateOrder) S.rateOrder = names.sort((a, b) => S.rate[b] - S.rate[a] || a.localeCompare(b, "ko"));
+  const rated = [...S.rateOrder.filter((nm) => S.rate[nm]), ...names.filter((nm) => !S.rateOrder.includes(nm))].map((nm) => [nm, S.rate[nm]]);
+  el.innerHTML = `<div class="panel stockp">
+    ${rows ? `<p class="gh">먹은 건 체크하면 사라져요</p><ul class="rows">${rows}</ul>` : `<p class="none">집에 남아 있는 게 없어요. 가져온 메뉴를 Today’s Meal에서 체크하면 여기에 쌓여요.</p>`}
+    ${eaten ? `<p class="gh">방금 먹은 것 · 별점을 남기면 추천 조합에 반영돼요</p><ul class="rows faded">${eaten}</ul>` : ""}
+    ${rated.length ? `<section class="fold"><button class="fold-h" id="ratefold" aria-expanded="${!!S.rateOpen}"><span class="fold-t">Ratings</span><span class="n">${rated.length} ${S.rateOpen ? "−" : "+"}</span></button>
+      ${S.rateOpen ? `<ul class="rows rated">${rated.map(([nm]) => `<li><span class="sbody"><span class="sname"><span>${esc(nm)}</span></span>${starsHtml(nm)}</span></li>`).join("")}</ul>` : ""}</section>` : ""}</div>`;
+  el.hidden = false;
+}
+// Report: 가져온 것의 시중가에서 낸 돈(추가취식 1회 3,000원)을 뺀 값을 달마다 모은다
+const EXTRA_FEE = 3000;
+const wonN = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
+function renderReport(el) {
+  const months = {};
+  for (const [k, p] of Object.entries(S.picks)) {
+    if (!p.done || !p.val) continue;
+    const ym = k.split("|")[1].slice(0, 6), mth = (months[ym] ||= { worth: 0, paid: 0, meals: 0 });
+    for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) mth.worth += p.val[nm] * (p.items?.[nm] || 1);
+    mth.paid += p.paid || 0; mth.meals += 1;
+  }
+  const keys = Object.keys(months).sort().reverse(), cur = todayYmd().slice(0, 6), m0 = months[cur] || { worth: 0, paid: 0, meals: 0 };
+  const max = Math.max(1, ...keys.map((ym) => months[ym].worth - months[ym].paid));
+  const total = keys.reduce((a, ym) => a + months[ym].worth - months[ym].paid, 0);
+  // 지금 보는 식당·끼니에서 코인당 값어치가 큰 메뉴
+  const best = itemsFor(S.date, S.meal).filter((it) => it.price && it.coin).map((it) => ({ it, v: it.price / it.coin })).sort((a, b) => b.v - a.v).slice(0, 6);
+  el.innerHTML = `<div class="panel rep">
+    <div class="rep-hero"><small>${+cur.slice(4)}월에 아낀 금액</small><b>${m0.meals ? `약 ${wonN(m0.worth - m0.paid)}` : "–"}</b>
+      <span>${m0.meals ? `시중가 약 ${wonN(m0.worth)} − 낸 돈 ${wonN(m0.paid)} · ${m0.meals}끼` : "테이크아웃 완료한 끼니가 쌓이면 여기에 나와요"}</span></div>
+    ${keys.length ? `<p class="gh">월별${keys.length > 1 ? ` · 모두 약 ${wonN(total)}` : ""}</p><ul class="rows">${keys.map((ym) => { const x = months[ym], v = x.worth - x.paid;
+      return `<li><span>${+ym.slice(4)}월</span><span class="bar"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span><span>약 ${wonN(v)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
+    ${best.length ? `<p class="gh">오늘 ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")} ${MEALS[S.meal] || ""} · 코인당 값어치</p><ul class="rows val">${best.map(({ it, v }) => `<li><span>${esc(it.name)}</span><span>${it.est ? "약 " : ""}${wonN(v)} <em>/코인</em></span></li>`).join("")}</ul>` : ""}
+    ${!keys.length && !best.length ? `<p class="none">메뉴에 시중가가 채워지면 계산이 시작돼요.</p>` : `<p class="none">시중가는 검색 최저가와 추정값이라 어림으로 봐 주세요. 추가취식은 한 번에 ${wonN(EXTRA_FEE)}으로 계산해요.</p>`}</div>`;
+  el.hidden = false;
+}
+function renderSheet() {
+  const el = $("page");
+  if (S.tab === "menu") { el.hidden = true; el.innerHTML = ""; return; }
+  if (S.tab === "stock") return renderStock(el);
+  if (S.tab === "report") return renderReport(el);
+  let body = "";
+  for (const m of Object.keys(MEALS)) pickedRests(S.date, m).forEach((x, ri, arr) => {
+    const k = keyOf(S.date, m, x.id), s = S.picks[k]?.items || {};
+    const by = Object.fromEntries(itemsFor(S.date, m, x.id).map((it) => [it.name, it]));
+    const extra = portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "";
+    // 한 끼니에 두 곳을 담았으면 둘 중 하나라는 뜻 — 순위를 눌러 바꾼다
+    const md = modeOf(S.date, m), mk = `${S.date}-${m}`;
+    const rk = arr.length > 1 && md === "rank" ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${mk}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
+    if (ri > 0) body += `<div class="join"><span class="sg" role="group" aria-label="두 식당의 관계">${[["rank", "순위"], ["or", "또는"], ["and", "그리고"]].map(([v, t]) => `<button data-mode="${v}" data-mk="${mk}" aria-pressed="${md === v}">${t}</button>`).join("")}</span></div>`;
+    const got = S.picks[k]?.got || {}, need = Object.keys(s).filter((n) => !isSide(by[n])), done = need.length > 0 && need.every((n) => got[n]);
+    const fin = !!S.picks[k]?.done;
+    const ate = fin ? `<span class="fin">테이크아웃 완료</span><button class="clr" data-undone="${esc(k)}">취소</button>`
+      : `<button class="ate" data-gotall="${esc(k)}" aria-pressed="${done}">전체 선택</button><button class="clr" data-clear="${esc(k)}">비우기</button>`;
+    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span>${ate}</h3><ul class="rows${fin ? " fin" : ""}">` +
+      ordered(s, by).map(({ name, q, it }, idx, arr) => {
+        const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
+        const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
+        const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm);
+        const side = isSide(it), g = got[name], ke = esc(k);
+        const lead = side ? `<span class="gsp"></span>`
+          : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
+        const sub = "";
+        const right = g ? `<span class="gst">${g === "ok" ? "가져옴" : "바꿈"}</span><span></span>`
+          : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">${PLUS}</button></span>
+          <button class="del" data-del="${nm}" data-k="${ke}" aria-label="${nm} 빼기">×</button>`;
+        return `<li class="${tied ? "tied" : ""}${g ? " got" : ""}">${lead}<span class="sbody"><span class="sname"><span>${label}${q > 1 && g ? ` ×${q}` : ""}</span>${coin}</span>${sub}</span>${right}</li>`;
+      }).join("") + "</ul>";
+  });
+  const pend = pendingKeys(S.date).length;
+  if (body) body = `<p class="gh">메모</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">` + body
+    + `<div class="fbar"><span class="shwrap"><button class="copy shico" id="share" aria-haspopup="true" aria-label="공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><span class="shmenu" id="shmenu" hidden><button id="copy">텍스트로 복사</button><button id="shareimg">이미지로 공유</button></span></span><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>가져온 메뉴를 체크하고 누르면 Stock으로 옮겨져요</p></div>`;
+  const open = el.querySelector("#shmenu") && !el.querySelector("#shmenu").hidden;
+  el.innerHTML = `<div class="panel">${body || `<p class="none">이 날짜에 담은 메뉴가 없어요. Menu에서 골라 담으면 여기에 모여요.</p>`}</div>`;
+  el.hidden = false;
+  if (open && $("shmenu")) $("shmenu").hidden = false;
+}
+const anyPicks = (d) => S.rests.some((x) => Object.keys(MEALS).some((m) => Object.keys(S.picks[keyOf(d, m, x.id)]?.items || {}).length));
+
+// ---------- message ----------
+function message(d) {
+  const out = [];
+  if ((S.memo[d] || "").trim()) out.push(`${MEMO_TO} ${S.memo[d].trim()}`);
+  for (const m of Object.keys(MEALS)) for (const [ri, x] of pickedRests(d, m).entries()) {
+    const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
+    const multi = pickedRests(d, m).length > 1, md = modeOf(d, m);
+    const rk = multi && md === "rank" ? ` (${ri + 1}순위)` : "";
+    if (multi && ri > 0) out.push(`— ${JOIN[md]} —`);
+    const n = portionsOf(k), items = itemsFor(d, m, x.id);
+    const by = Object.fromEntries(items.map((it) => [it.name, it]));
+    // 진열대 섹션 순서대로 묶는다 — 섹션 이름이 먼저, 그 섹션에서 집을 것들이 뒤에
+    const sections = new Map(), drink = [];
+    for (const [name, q] of Object.entries(sel)) {
+      const it = by[name]; if (!it) continue;
+      const label = `${name}${q > 1 ? ` ×${q}` : ""}`;
+      if (it.drink) { drink.push(label); continue; }
+      if (!sections.has(it.cat)) sections.set(it.cat, []);
+      sections.get(it.cat).push(label);
+    }
+    const b = budget(items, sel, n);
+    if (b.fixed) drink.push(b.fixed > 1 ? `지정 음료 ×${b.fixed}` : "지정 음료");
+    const lines = [`${m === "1" ? "🌅" : "🌙"} ${dateLabel(d)} ${MEALS[m]} · ${x.name}${rk}${n > 1 ? `  ➕ 추가취식 ${n - 1}회` : ""}`];
+    for (const c of [...sections.keys()].sort((a, b2) => rank(a) - rank(b2))) lines.push(`[${c}] ${sections.get(c).join(" / ")}`);
+    if (drink.length) lines.push(`🥤 ${drink.join(" / ")}`);
+    out.push(lines.join("\n"));
+  }
+  return out.join("\n\n");
+}
+const MEMO_TO = "Dear 충토."; // 메모 앞에 붙는 받는 사람
+// ---------- image card ----------
+// 카톡에 그대로 올릴 수 있는 한 장: 날짜 제목 → 끼니·식당별로 진열대 순서의 메뉴
+function cardBlocks(d) {
+  const out = [];
+  for (const m of Object.keys(MEALS)) pickedRests(d, m).forEach((x, ri, arr) => {
+    const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
+    const n = portionsOf(k), items = itemsFor(d, m, x.id);
+    const by = Object.fromEntries(items.map((it) => [it.name, it]));
+    const rows = [];
+    for (const { name, q, it } of ordered(sel, by)) {
+      if (!it) continue;
+      // 현장 구분(Deli · Side · Pick)만 남긴다 — 메뉴 분류는 내가 짐작한 것이라 뺀다
+      const tag = /pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "";
+      rows.push({ text: name, q, side: isSide(it), coin: it.drink ? 0 : it.coin || 0, drink: !!it.drink, pick: tag === "Pick", tag, frozen: it.cat === "냉동" });
+    }
+    // Deli·Side·Pick 이 있는 식당은 같은 구분끼리 모은다 (음료는 맨 뒤)
+    if (rows.some((r) => r.tag)) { const o = { Deli: 0, Pick: 1, Side: 2 }; rows.forEach((r, i) => { r.i = i; }); rows.sort((a, b2) => (a.drink - b2.drink) || ((o[a.tag] ?? 3) - (o[b2.tag] ?? 3)) || (a.i - b2.i)); }
+    const b = budget(items, sel, n);
+    if (b.fixed) rows.push({ text: "지정 음료", q: b.fixed, drink: true });
+    out.push({ title: MEALS[m], rest: x.name, extra: n - 1, rows, rank: arr.length > 1 && modeOf(d, m) === "rank" ? ri + 1 : 0, join: ri > 0 ? JOIN[modeOf(d, m)] : "" });
+  });
+  return out;
+}
+function drawCard(d) {
+  const blocks = cardBlocks(d), memo = (S.memo[d] || "").trim();
+  const W = 400, P = 40, SC = 2.7, FONT = '-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Asta Sans", system-ui, sans-serif';
+  const INK = "#1D1B14", MUTED = "rgba(29,27,20,.5)", LINE = "rgba(29,27,20,.1)", OLIVE = "#5B5121", ORANGE = "#ED6328", MUSTARD = "#BFA732", SOFT = "#F0E9C8";
+  const cv = document.createElement("canvas"), cx = cv.getContext("2d");
+  const font = (w, px) => { cx.font = `${w} ${px}px ${FONT}`; };
+  const wrap = (text, max) => { // 띄어쓰기에서 먼저 끊고, 한 낱말이 너무 길 때만 글자 단위로
+    const lines = []; let cur = "";
+    for (const word of text.split(/(?<= )/)) {
+      if (!cur || cx.measureText((cur + word).trimEnd()).width <= max) { cur += word; }
+      else { lines.push(cur.trimEnd()); cur = word; }
+      while (cx.measureText(cur.trimEnd()).width > max) { let k = cur.length - 1; while (k > 1 && cx.measureText(cur.slice(0, k)).width > max) k--; lines.push(cur.slice(0, k)); cur = cur.slice(k); }
+    }
+    if (cur.trim()) lines.push(cur.trimEnd()); return lines;
+  };
+  const used = { coin: false, pick: false, drink: false };
+  const pill = (t, x, yMid, bg, fg, alignRight) => { font(600, 11); const tw = cx.measureText(t).width, w = tw + 16, x0 = alignRight ? x - w : x;
+    cx.fillStyle = bg; cx.beginPath(); cx.roundRect(x0, yMid - 11, w, 22, 11); cx.fill(); cx.fillStyle = fg; cx.textBaseline = "middle"; cx.fillText(t, x0 + 8, yMid + .5); cx.textBaseline = "alphabetic"; return w; };
+  // 1) 배치 계산
+  const ops = []; let y = P + 34;
+  ops.push(() => { font(600, 34); cx.fillStyle = INK; cx.textBaseline = "alphabetic"; const day = String(+d.slice(6, 8)); cx.fillText(day, P, P + 30); const w = cx.measureText(day).width;
+    font(600, 17); cx.fillText(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][ymd(d).getUTCDay()], P + w + 8, P + 30);
+    font(600, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText("TODAY’S MEAL", W - P, P + 30); cx.textAlign = "left"; });
+  if (memo) { font(400, 15); const ls = wrap(memo, W - 2 * P - 28), my = y + 14, h = ls.length * 22 + 20 + 20;
+    ops.push(() => { cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(P, my, W - 2 * P, h, 12); cx.fill();
+      font(600, 11); cx.fillStyle = OLIVE; cx.fillText(MEMO_TO, P + 14, my + 22);
+      font(400, 15); cx.fillStyle = INK; ls.forEach((ln, i) => cx.fillText(ln, P + 14, my + 46 + i * 22)); });
+    y += h + 14; }
+  y += 20;
+  blocks.forEach((b, bi) => {
+    // 끼니가 바뀌면 굵은 선과 큰 제목으로 끊고, 그 아래 식당별 묶음을 둔다
+    if (!b.join) { const top = y + (bi ? 14 : 0);
+      ops.push(() => { cx.fillStyle = INK; cx.fillRect(P, top, W - 2 * P, 1.5); font(600, 22); cx.fillText(b.title, P, top + 36); });
+      y = top + 66; }
+    else { const top = y + 4;
+      ops.push(() => { font(600, 11); const t = b.join, tw = cx.measureText(t).width, mid = W / 2; cx.fillStyle = LINE; cx.fillRect(P, top, mid - tw / 2 - 10 - P, .5); cx.fillRect(mid + tw / 2 + 10, top, W - P - mid - tw / 2 - 10, .5); cx.fillStyle = MUTED; cx.fillText(t, mid - tw / 2, top + 4); });
+      y = top + 28; }
+    const hy = y;
+    ops.push(() => { font(600, 13); cx.fillStyle = INK; cx.fillText(b.rest, P, hy + 4); const x = P + cx.measureText(b.rest).width + 8;
+      if (b.rank) pill(`${b.rank}순위`, x, hy - 1, b.rank === 1 ? OLIVE : "rgba(29,27,20,.08)", b.rank === 1 ? "#fff" : INK);
+      if (b.extra > 0) pill(`추가취식 +${b.extra}`, W - P, hy - 1, SOFT, OLIVE, true); });
+    y += 26;
+    for (const [ii, it] of b.rows.entries()) {
+      const ry = y; if (it.drink) used.drink = true; else if (!it.tag && it.coin) used.coin = true;
+      font(600, 10); const tagW = it.tag ? cx.measureText(it.tag).width + 12 + 8 : 0, frzW = it.frozen ? cx.measureText("Frozen").width + 12 + 6 : 0; font(400, 15);
+      const right = (it.tag ? 0 : (it.drink ? 1 : it.coin) * 11 + 10) + tagW;
+      const ls = wrap(it.text, W - 2 * P - right - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0) - frzW);
+      ops.push(() => { ls.forEach((ln, i) => { const ly = ry + 15 + i * 22; let x = P;
+          if (it.side) { if (i === 0) { font(600, 15); cx.fillStyle = ORANGE; cx.fillText("+", x, ly); } x += 12; }
+          font(400, 15); cx.fillStyle = it.side ? MUTED : INK; cx.fillText(ln, x, ly);
+          if (i === ls.length - 1 && (it.frozen || it.q > 1)) { // 이름 뒤 작은 칩: Frozen(테두리), 수량(머스터드)
+            let tx = x + cx.measureText(ln).width + 6; cx.textBaseline = "middle";
+            if (it.frozen) { font(600, 10); const w = cx.measureText("Frozen").width + 12; cx.beginPath(); cx.roundRect(tx + .5, ly - 13.500, w, 16, 8); cx.lineWidth = 1; cx.strokeStyle = OLIVE; cx.stroke(); cx.fillStyle = OLIVE; cx.fillText("Frozen", tx + 6.500, ly - 5); tx += w + 5; }
+            if (it.q > 1) { const t = `×${it.q}`; font(600, 11); const tw = cx.measureText(t).width; cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(tx, ly - 14.500, tw + 12, 18, 9); cx.fill(); cx.fillStyle = OLIVE; cx.fillText(t, tx + 6, ly - 5); }
+            cx.textBaseline = "alphabetic"; } });
+        // 오른쪽 끝: Deli · Side · Pick 글자 + 코인 동그라미 (Pick 은 머스터드, 음료는 빈 원)
+        const n = it.tag ? 0 : it.drink ? 1 : it.coin, cy = ry + 10; // Deli·Side·Pick 칩이 있으면 동그라미 대신 그 자리에 칩
+        for (let k = 0; k < n; k++) { const dx = W - P - 4 - (n - 1 - k) * 11; cx.beginPath(); cx.arc(dx, cy, 3.5, 0, Math.PI * 2);
+          if (it.drink) { cx.lineWidth = 1.3; cx.strokeStyle = OLIVE; cx.stroke(); } else { cx.fillStyle = it.pick ? MUSTARD : OLIVE; cx.fill(); } }
+        // 칩: 현장 구분(Deli 올리브 · Side 회색 · Pick 머스터드) + 냉동이면 Frozen(테두리)
+        let cxr = n ? W - P - n * 11 - 8 : W - P; font(600, 10); cx.textBaseline = "middle";
+        const chip = (t, bg, fg, line) => { const w = cx.measureText(t).width + 12, x0 = cxr - w; cx.beginPath(); cx.roundRect(x0, cy - 8, w, 16, 8);
+          if (line) { cx.lineWidth = 1; cx.strokeStyle = line; cx.stroke(); } else { cx.fillStyle = bg; cx.fill(); } cx.fillStyle = fg; cx.fillText(t, x0 + 6, cy + .5); cxr = x0 - 4; };
+        if (it.tag) chip(it.tag, ...(it.tag === "Deli" ? [OLIVE, "#fff"] : it.tag === "Pick" ? [MUSTARD, "#fff"] : ["rgba(29,27,20,.08)", INK]));
+        cx.textBaseline = "alphabetic"; });
+      y += ls.length * 22 + (b.rows[ii + 1]?.side ? 0 : 8); // 곁들임은 윗줄에 바짝 붙인다
+    }
+    y += 10;
+  });
+  // 범례: 이 이미지에 실제로 나온 동그라미만 설명
+  const legend = [used.coin && ["코인", OLIVE, false], used.pick && ["Pick", MUSTARD, false], used.drink && ["음료", OLIVE, true]].filter(Boolean);
+  if (legend.length) { const ly = y + 14; y += 30;
+    ops.push(() => { cx.fillStyle = LINE; cx.fillRect(P, ly - 14, W - 2 * P, .5); let x = P; font(400, 11);
+      for (const [t, col, hollow] of legend) { cx.beginPath(); cx.arc(x + 3.5, ly + 6, 3.5, 0, Math.PI * 2);
+        if (hollow) { cx.lineWidth = 1.3; cx.strokeStyle = col; cx.stroke(); } else { cx.fillStyle = col; cx.fill(); }
+        cx.fillStyle = MUTED; cx.fillText(t, x + 12, ly + 10); x += 12 + cx.measureText(t).width + 14; } }); }
+  const H = Math.ceil(y + P - 12);
+  // 2) 그리기
+  cv.width = W * SC; cv.height = H * SC; cx.scale(SC, SC);
+  cx.fillStyle = "#fff"; cx.fillRect(0, 0, W, H);
+  ops.forEach((f) => f());
+  return cv;
+}
+async function shareImage() {
+  if (!anyPicks(S.date)) return;
+  const cv = drawCard(S.date);
+  const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+  const markSent = () => { for (const x of S.rests) for (const m of Object.keys(MEALS)) { const p = S.picks[keyOf(S.date, m, x.id)]; if (p && Object.keys(p.items || {}).length) p.sent = true; } save(); };
+  let dl = null;
+  try { dl = await claude.use("downloads"); } catch (_) {}
+  if (dl && blob) {
+    try { await dl.save({ filename: `meal-${S.date.slice(4)}.png`, data: blob }); markSent(); render(); return; }
+    catch (e) { if (e?.code === "declined") return; if (e?.code === "rate_limited") { toast("잠시 뒤에 다시 눌러주세요"); return; } }
+  }
+  // 저장 창을 쓸 수 없으면 이미지를 띄워서 길게 눌러 공유·저장하게 한다
+  const el = $("sheet");
+  el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button><div class="panel" role="dialog" aria-label="이미지"><div class="grab"></div>
+    <div class="sh"><b>Today’s Meal</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+    <img class="shot" alt="담은 메뉴" src="${cv.toDataURL("image/png")}"><p class="shotnote">이미지를 길게 눌러 공유하거나 저장하세요</p></div>`;
+  el.hidden = false; markSent();
+}
+async function copy() {
+  const text = message(S.date);
+  if (!text) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (_) {}
+  const t = $("fallback");
+  if (!ok) { t.hidden = false; t.value = text; t.focus(); t.select(); } else t.hidden = true;
+  for (const x of S.rests) for (const m of Object.keys(MEALS)) { const p = S.picks[keyOf(S.date, m, x.id)]; if (p && Object.keys(p.items || {}).length) p.sent = true; }
+  save(); render();
+  toast(ok ? "복사했어요. 카톡에 붙여 넣으세요" : "위 글을 길게 눌러 복사해주세요");
+}
+function toast(t) { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2200); }
+
+// ---------- events ----------
+window.addEventListener("error", (e) => toast(`오류: ${e.message}`));
+window.addEventListener("unhandledrejection", (e) => toast(`오류: ${e.reason?.message || e.reason}`));
+// 탭 진단: 터치가 페이지까지 오는지, click 이 따라오는지 세어 상단에 표시한다
+const DIAG = { down: 0, up: 0, click: 0, handled: 0 };
+let pendingUp = null, lastHandled = 0;
+function diag() { const el = $("diag"); if (el) el.textContent = `터치 ${DIAG.down}·${DIAG.up} / 클릭 ${DIAG.click} / 처리 ${DIAG.handled}`; }
+function handle(e) {
+  const now = Date.now();
+  try { onTap(e); DIAG.handled++; } catch (err) { toast(`오류: ${err.message}`); console.error(err); }
+  diag();
+}
+// click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
+document.addEventListener("click", (e) => handle(e), true);
+// 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
+document.addEventListener("input", (e) => {
+  if (e.target.id === "q") { S.q = e.target.value; const lb = $("lbody"); if (lb) lb.innerHTML = S.find(S.q); return; }
+  if (e.target.id === "memo") { S.memo[S.date] = e.target.value; save(); }
+  if (e.target.classList?.contains("swapin")) { // 바꾼 메뉴 이름 — 재고에도 그 이름으로 올린다
+    const k = e.target.dataset.k, n = e.target.dataset.n, p = S.picks[k]; if (!p) return;
+    (p.swapTo || (p.swapTo = {}))[n] = e.target.value;
+    save();
+  }
+});
+// 탭 이동: 기기마다 마지막으로 보던 탭을 기억한다(남편은 Cart, 집에서는 Stock)
+function goTab(t) { S.tab = t; try { localStorage.setItem("takeout-tab", t); } catch (_) {} render(); scrollTo(0, 0); }
+function onTap(e) {
+  const ph = e.target.closest("[data-photo]");
+  if (ph) { // 큰 사진
+    const it = itemsFor(S.date, S.meal).find((x) => x.name === ph.dataset.photo); if (!it?.photo) return;
+    const el = $("photo"); el.innerHTML = `<img alt="" src="${esc(PHOTO_BASE + it.photo)}"><span>${esc(it.name)}</span>`; el.hidden = false; return;
+  }
+  const b = e.target.closest("button");
+  // 트레이는 버튼 말고 어디를 눌러도 목록이 열린다
+  if ($("shmenu") && !$("shmenu").hidden && !e.target.closest(".shwrap")) { $("shmenu").hidden = true; return; }
+  if (!b) { if (e.target.closest(".tray")) goTab("cart"); return; }
+  if (b.dataset.nav) { goTab(b.dataset.nav); return; }
+  const k = b.dataset.k || keyOf(S.date, S.meal);
+  if (b.id === "sheetclose" || b.id === "sheetclose2") { $("sheet").hidden = true; $("sheet").innerHTML = ""; return; }
+  if (b.id === "stamp") { refreshMenu(); return; }
+  if (b.dataset.qopen != null) { S.q = ""; render(); $("q")?.focus(); return; }
+  if (b.dataset.qclose != null) { S.q = null; render(); return; }
+  if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
+  if (b.id === "photo") { b.hidden = true; b.innerHTML = ""; return; }
+  if (b.dataset.ate) { const dm = b.dataset.ate; if (S.ate[dm] === b.dataset.rid) delete S.ate[dm]; else S.ate[dm] = b.dataset.rid; save(); render(); return; }
+  if (b.dataset.mode) { S.mode[b.dataset.mk] = b.dataset.mode; save(); render(); return; }
+  if (b.dataset.rank) { // 순위 칩: 1순위를 누르면 다른 곳이 1순위로, 2순위를 누르면 그곳이 1순위로
+    const key = b.dataset.rank, other = pickedRests(S.date, key.slice(9)).find((x) => x.id !== b.dataset.rid);
+    S.rank[key] = b.classList.contains("first") && other ? other.id : b.dataset.rid;
+    save(); render(); return;
+  }
+
+  if (b.dataset.eat != null) { // 먹었어요: 하나씩 줄고, 다 먹으면 사라진다
+    const e = S.stock.find((x) => x.src === b.dataset.eat); if (!e) return;
+    S.eaten.push({ ...e, q: 1 }); S.eaten = S.eaten.slice(-20);
+    if (e.q > 1) e.q -= 1; else S.stock = S.stock.filter((x) => x !== e);
+    save(); render(); return;
+  }
+  if (b.dataset.rate != null) { // 별점: 같은 점수를 다시 누르면 지운다
+    const v = +b.dataset.v, nm = b.dataset.rate;
+    if (S.rate[nm] === v) delete S.rate[nm]; else S.rate[nm] = v;
+    cache.clear(); save(); render(); return;
+  }
+  if (b.dataset.uneat != null) { // 되돌리기
+    const e = S.eaten[+b.dataset.uneat]; if (!e) return;
+    S.eaten.splice(+b.dataset.uneat, 1);
+    const cur = S.stock.find((x) => x.src === e.src); if (cur) cur.q = (cur.q || 1) + 1; else S.stock.push({ ...e, q: 1 });
+    save(); render(); return;
+  }
+  if (b.id === "takedone") { commitDay(S.date); save(); render(); toast("Stock으로 옮겼어요"); return; }
+  if (b.dataset.undone) { uncommit(b.dataset.undone); save(); render(); return; }
+  if (b.dataset.got != null) { setGot(k, b.dataset.got, S.picks[k]?.got?.[b.dataset.got] ? null : "ok"); save(); render(); return; }
+  if (b.dataset.ungot != null) { unGot(k, b.dataset.ungot); save(); render(); return; }
+  if (b.dataset.gotall) { // 한 번에 체크 / 다시 누르면 전부 해제
+    const kk = b.dataset.gotall, p = S.picks[kk]; if (!p) return;
+    if (p.done) return;
+    if (b.getAttribute("aria-pressed") === "true") unGotAll(kk);
+    else for (const n of Object.keys(p.items || {})) if (!p.got?.[n]) setGot(kk, n, "ok");
+    save(); render(); return;
+  }
+  if (b.dataset.clear) { unGotAll(b.dataset.clear); delete S.picks[b.dataset.clear]; save(); render(); return; }
+  if (b.dataset.del != null) { const p = S.picks[k]; unGot(k, b.dataset.del); if (p?.items) { delete p.items[b.dataset.del]; p.sent = false; } save(); render(); return; }
+  if (b.dataset.rest) { S.rest = b.dataset.rest; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
+  if (b.dataset.date) { S.date = b.dataset.date; S.cat = null; render(); scrollTo(0, 0); return; }
+  if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }
+  if (b.dataset.cat) { S.q = null; S.cat = b.dataset.cat; S.catTouched = true; render(); b.scrollIntoView({ inline: "center", block: "nearest" }); return; }
+  if (b.dataset.portion) { S.portions[k] = +b.dataset.portion; save(); render(); return; }
+  if (b.id === "edit") { S.edit = !S.edit; render(); return; }
+  if (b.id === "ratefold") { S.rateOpen = !S.rateOpen; S.rateOrder = null; renderSheet(); return; }
+  if (b.id === "fold") { S.foldOpen = !S.foldOpen; render(); return; }
+  if (b.dataset.hide != null) { const n = b.dataset.hide; S.hide.has(n) ? S.hide.delete(n) : S.hide.add(n); save(); render(); return; }
+  if (b.dataset.hidecat != null) { const c = b.dataset.hidecat; S.hideCats.has(c) ? S.hideCats.delete(c) : S.hideCats.add(c); save(); render(); return; }
+  if (b.dataset.combo != null) {
+    const c = S.combos[+b.dataset.combo]; if (!c) return;
+    const items = {};
+    for (const it of c.items) items[it.name] = (items[it.name] || 0) + 1;
+    if (c.drink) items[c.drink.name] = portionsOf(k);
+    unGotAll(k);
+    if (comboOn(c, S.picks[k]?.items || {})) delete S.picks[k]; // 다시 누르면 비운다
+    else S.picks[k] = { items, sent: false };
+    save(); render(); return;
+  }
+  if (b.id === "copy") { $("shmenu").hidden = true; copy(); return; }
+  if (b.id === "shareimg") { $("shmenu").hidden = true; shareImage(); return; }
+  if (b.id === "share") { $("shmenu").hidden = !$("shmenu").hidden; return; }
+  if (b.id === "clear") { delete S.picks[k]; save(); render(); return; }
+  if (b.id === "reload") { load(true); return; }
+  if (b.dataset.star != null) { const n = b.dataset.star; S.fav.has(n) ? S.fav.delete(n) : S.fav.add(n); save(); render(); return; }
+  if (b.dataset.tog != null) { // 목록의 체크 원: 누르면 담고, 다시 누르면 뺀다
+    const p = S.picks[k] || (S.picks[k] = { items: {} });
+    if (!p.items || typeof p.items !== "object") p.items = {};
+    const n = b.dataset.tog;
+    if (p.items[n]) { unGot(k, n); delete p.items[n]; } else p.items[n] = 1;
+    p.sent = false; save(); render(); return;
+  }
+  if (b.dataset.add != null || b.dataset.sub != null) {
+    const p = S.picks[k] || (S.picks[k] = { items: {} });
+    if (!p.items || typeof p.items !== "object") p.items = {};
+    const n = b.dataset.add ?? b.dataset.sub;
+    p.items[n] = Math.max(0, (p.items[n] || 0) + (b.dataset.add != null ? 1 : -1));
+    if (!p.items[n]) { unGot(k, n); delete p.items[n]; }
+    p.sent = false;
+    save(); render();
+  }
+}
+
+// 갱신 시각 + 동그란 화살표: 누르면 메뉴를 새로 가져온다
+function setStamp() {
+  $("stamp").innerHTML = `${S.updated ? `<span>${esc(S.updated)}</span>` : ""}<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M12 7a5 5 0 1 1-1.600-3.660M12 1.800V4.200H9.600"/></svg>`;
+  $("stamp").classList.toggle("busy", !!S.syncing); $("stamp").disabled = !!S.syncing;
+}
+async function refreshMenu() {
+  if (S.syncing) return;
+  S.syncing = true; setStamp();
+  try {
+    const mcp = await claude.use("mcp");
+    if (mcp?.sync) await mcp.sync().catch(() => toast("새로 가져오지 못했어요. 저장된 메뉴를 다시 읽을게요")); // 독립 페이지: 식당에서 지금 다시 받아 온다
+    await load(true);
+  } finally { S.syncing = false; setStamp(); }
+}
+// ---------- load ----------
+async function load(refresh = false) {
+  const mcp = await claude.use("mcp");
+  if (!mcp) { showState("열쇠가 없어 메뉴를 불러올 수 없어요."); return; }
+  try {
+    const res = await mcp.callTool("Supabase", "execute_sql", { project_id: PROJECT, query: QUERY },
+      { cache: { staleTime: 10 * 60e3, gcTime: 2 * 86400e3, ...(refresh ? { refresh: true } : {}) } });
+    S.rows = parsePayload(res.payload);
+    const seen = new Map();
+    for (const r of S.rows) if (!seen.has(r.r)) seen.set(r.r, r.rn || r.r);
+    S.rests = [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => (b.id === "REST000007") - (a.id === "REST000007"));
+    cache.clear();
+    const u = S.rows.reduce((a, r) => (r.u > a ? r.u : a), "");
+    if (u) {
+      const t = new Date(new Date(u).getTime() + 9 * 3600e3);
+      const hm = `${String(t.getUTCHours()).padStart(2, "0")}:${String(t.getUTCMinutes()).padStart(2, "0")}`;
+      const same = t.toISOString().slice(0, 10).replace(/-/g, "") === todayYmd();
+      S.updated = same ? hm : `${t.getUTCMonth() + 1}/${t.getUTCDate()} ${hm}`;
+    } else S.updated = null;
+    if (!S.rows.length) { showState("저장된 메뉴가 없습니다. 메뉴 갱신이 아직 돌지 않았을 수 있습니다.", true); return; }
+    render();
+  } catch (e) {
+    const code = e?.code;
+    const msg = {
+      server_not_connected: "Supabase 커넥터가 연결되어 있지 않습니다. claude.ai 설정의 커넥터에서 Supabase를 추가해주세요.",
+      needs_reauth: "Supabase 연결이 만료되었습니다. claude.ai 설정의 커넥터에서 다시 연결해주세요.",
+      not_in_manifest: "이 페이지의 Supabase 접근이 꺼져 있습니다. 페이지 권한에서 Supabase를 허용해주세요.",
+      approval_required: "메뉴를 읽으려면 Supabase 접근 승인이 필요합니다.",
+      selection_required: "Supabase 커넥터가 여러 개입니다. 사용할 것을 골라주세요.",
+    }[code] || `메뉴를 불러오지 못했습니다 (${code || "오류"}).`;
+    showState(msg, code !== "server_not_connected" && code !== "needs_reauth");
+  }
+}
+function showState(text, retry) {
+  $("list").innerHTML = `<div class="empty"><span>${esc(text)}</span>${retry ? `<button id="reload">다시 불러오기</button>` : ""}</div>`;
+}
+
+load();
+initStore();
+</script>
+
+</body></html>

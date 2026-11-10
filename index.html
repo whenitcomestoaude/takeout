@@ -316,11 +316,35 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 /* 곁들임은 윗줄 메뉴에 딸린 것 — 구분선 없이 들여쓴다 */
 .sheet .rows li.tied::before { display: none; }
 .sheet .rows li.tied { min-height: 40px; margin-top: -4px; }
-.sheet .rows li.tied .sname { padding-left: 14px; padding-block: 8px 14px; color: var(--muted); }
+.sheet .rows li.tied .sname { color: var(--muted); }
 .sheet h3 { margin: 16px 0 8px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
 .sheet h3 span i { font-style: normal; font-size: 11px; color: var(--gold-deep); margin-left: 4px; }
 .sheet h3 em { font-style: normal; font-weight: 400; color: var(--muted); margin-left: 8px; }
-.sheet .rows li { grid-template-columns: minmax(0, 1fr) auto 36px; min-height: 52px; }
+.sheet .rows li { grid-template-columns: 22px minmax(0, 1fr) auto 36px; column-gap: 12px; min-height: 52px; align-items: start; }
+.sheet .rows li > .rq, .sheet .rows li > .del, .sheet .rows li > .gst, .sheet .rows li > .lnk { align-self: center; }
+.sheet .rows li > .rq { margin-right: -12px; }
+.gchk { width: 22px; height: 22px; margin-top: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); display: grid; place-items: center; }
+.gchk svg { width: 12px; height: 12px; fill: none; stroke: var(--btn-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0; pointer-events: none; }
+.gchk[aria-pressed="true"] { background: var(--btn); box-shadow: none; }
+.gchk.sw[aria-pressed="true"] { background: var(--heart); }
+.gchk[aria-pressed="true"] svg { opacity: 1; }
+.gsp { width: 22px; }
+.sbody { display: grid; min-width: 0; padding: 14px 0; gap: 6px; }
+.sheet .sbody .sname { padding: 0; }
+.lnk { justify-self: start; font-size: 12px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+.swp { display: flex; align-items: center; gap: 10px; }
+.swapin { flex: 1; min-width: 0; padding: 8px 10px; border: 0; border-radius: 9px; background: var(--page); color: var(--ink); font: 400 14px var(--sans); box-shadow: inset 0 0 0 .5px var(--line); }
+.gst { font-size: 12px; color: var(--muted); padding-right: 4px; white-space: nowrap; }
+.sheet .rows li.got .sname > span:first-child { color: var(--muted); }
+.sheet .rows li.tied .sbody { padding-top: 0; }
+.ssub { font-size: 12px; color: var(--muted); }
+.xq { font-style: normal; font-size: 11px; font-weight: 600; color: var(--gold-deep); background: var(--soft); border-radius: 999px; padding: 2px 7px; margin-left: 4px; }
+.stockp .rows li { grid-template-columns: 22px minmax(0, 1fr) auto; padding-right: 16px; }
+.stockp .gh { margin: 16px 0 8px; }
+.rows.faded .sname { color: var(--muted); }
+.ur { display: inline-flex; align-items: center; gap: 10px; }
+#stockbtn { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--well); color: var(--ink); }
+#stockbtn b { color: var(--heart); font-weight: 600; margin-left: 2px; }
 
 .sheet .sname { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 12px 14px 0; font-size: 15px; font-weight: 400; }
 .sheet .sname span:first-child { overflow-wrap: anywhere; }
@@ -342,7 +366,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="top">
 <header class="band">
   <div class="gutter">
-    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span id="stamp"></span></div>
+    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="ur"><span id="stamp"></span><button id="stockbtn">Stock</button></span></div>
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
   </div>
 </header>
@@ -379,7 +403,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, stock: [], eaten: [], noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -446,16 +470,43 @@ function itemsFor(d, m, rid = S.rest) {
   cache.set(k, list);
   return list;
 }
-// 먹은 횟수: 보낸 것만 센다. 한 끼니에 두 곳을 '또는/순위'로 걸었으면 "이걸로 먹었어요"를 누른 쪽만 센다.
+// ---------- 픽업 체크와 재고 ----------
+// picks[k].got[name] = "ok"(가져옴) | "swap"(다른 걸로 바꿈). 가져온 것은 S.stock(집에 있는 것)에 올라가고, 먹었다고 체크하면 빠진다.
+function unGot(k, name) {
+  const p = S.picks[k];
+  if (p?.got) delete p.got[name];
+  if (p?.swapTo) delete p.swapTo[name];
+  S.stock = S.stock.filter((e) => e.src !== `${k}|${name}`);
+}
+const unGotAll = (k) => { for (const n of Object.keys(S.picks[k]?.got || {})) unGot(k, n); };
+function setGot(k, name, state) {
+  unGot(k, name);
+  const p = S.picks[k]; if (!state || !p?.items?.[name]) return;
+  (p.got || (p.got = {}))[name] = state;
+  const [r, dm] = k.split("|"), d = dm.slice(0, 8), m = dm.slice(9);
+  const it = itemsFor(d, m, r).find((x) => x.name === name);
+  if (it && isSide(it)) return; // 소스 같은 곁들임은 재고로 세지 않는다
+  S.stock.push({ src: `${k}|${name}`, n: state === "swap" ? "" : name, from: state === "swap" ? name : null, q: p.items[name], d, m,
+    r: S.rests.find((x) => x.id === r)?.name || r, fz: it?.cat === "냉동", t: Date.now() });
+}
+const stockName = (e) => e.n || `${e.from} 대신 가져온 것`;
+const stockCount = () => S.stock.reduce((a, e) => a + (e.q || 1), 0);
+// 먹은 횟수: 픽업 체크가 있는 끼니는 실제로 가져온 것만 센다. 체크가 없으면 보낸 것을 세되,
+// 한 끼니에 두 곳을 '또는/순위'로 걸었으면 고른 쪽만 센다.
 function counts(k) {
   const [r, dm] = k.split("|");
   const rivals = Object.keys(S.picks).filter((o) => o !== k && o.split("|")[1] === dm && Object.keys(S.picks[o]?.items || {}).length);
   if (!rivals.length || (S.mode[dm] || "or") === "and") return true;
+  if (rivals.some((o) => Object.keys(S.picks[o]?.got || {}).length)) return false; // 다른 쪽을 가져왔다
   return S.ate[dm] === r;
 }
 function freq() {
   const f = {};
-  for (const [k, p] of Object.entries(S.picks)) if (p.sent && counts(k)) for (const n of Object.keys(p.items || {})) f[n] = (f[n] || 0) + 1;
+  for (const [k, p] of Object.entries(S.picks)) {
+    const got = p.got || {};
+    if (Object.keys(got).length) { for (const [n, st] of Object.entries(got)) if (st === "ok" && p.items?.[n]) f[n] = (f[n] || 0) + 1; }
+    else if (p.sent && counts(k)) for (const n of Object.keys(p.items || {})) f[n] = (f[n] || 0) + 1;
+  }
   return f;
 }
 const portionsOf = (k) => { const v = S.portions[k]; return v === true ? 2 : (v || 1); };
@@ -494,7 +545,7 @@ function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
-    try { await docRef.set({ fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
+    try { await docRef.set({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
     catch (e) { console.warn(e); }
   }, 700);
 }
@@ -513,7 +564,8 @@ async function initStore() {
       const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
       S.fav = new Set(v.fav || []); S.picks = mig(v.picks); S.portions = mig(v.portions || v.extra);
       if (v.rest) S.rest = v.rest;
-      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock.map((e) => ({ ...e })) : []; S.eaten = Array.isArray(v.eaten) ? v.eaten.map((e) => ({ ...e })) : [];
+    S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
       if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
       if (S.rows.length) render();
     }
@@ -760,6 +812,7 @@ function renderTray(items, sel, n) {
     return `<p class="${m === S.meal ? "cur" : ""}"><b>${MEALS[m]}${extra}</b><span>${names.length ? names.join(", ") : "아직 없음"}</span>${clr}</p>`;
   }).join("");
   renderSheet();
+  $("stockbtn").innerHTML = `Stock${stockCount() ? ` <b>${stockCount()}</b>` : ""}`;
   $("copy").disabled = $("share").disabled = !anyPicks(S.date);
   $("copy").textContent = "복사";
 }
@@ -769,9 +822,30 @@ function ordered(sel, by) {
   return Object.entries(sel).map(([name, q], i) => ({ name, q, it: by[name], i }))
     .sort((a, b) => (rank(a.it?.cat) - rank(b.it?.cat)) || (isSide(a.it) - isSide(b.it)) || (a.i - b.i));
 }
+const dayLabel = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)} ${WD[ymd(d).getUTCDay()]}`;
+// 재고: 가져와서 아직 안 먹은 것. 오래된 것부터.
+function renderStock(el) {
+  const today = ymd(todayYmd());
+  const rows = [...S.stock].sort((a, b) => a.d.localeCompare(b.d) || (a.t || 0) - (b.t || 0)).map((e) => {
+    const days = Math.round((today - ymd(e.d)) / 864e5);
+    const sub = [dayLabel(e.d), MEALS[e.m], e.r, days > 0 ? `${days}일째` : "오늘", e.fz ? "Frozen" : "", e.from && e.n ? `${e.from} 대신` : ""].filter(Boolean).join(" · ");
+    return `<li><button class="gchk" data-eat="${esc(e.src)}" aria-label="먹었어요"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></button>
+      <span class="sbody"><span class="sname"><span>${esc(stockName(e))}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
+  }).join("");
+  const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span></span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">되돌리기</button></li>`).join("");
+  const keep = el.querySelector(".panel")?.scrollTop || 0;
+  el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button>
+    <div class="panel stockp" role="dialog" aria-label="재고"><div class="grab"></div>
+    <div class="sh"><b>Stock</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+    ${rows ? `<p class="gh">먹은 건 체크하면 사라져요</p><ul class="rows">${rows}</ul>` : `<p class="none">집에 남아 있는 게 없어요. 가져온 메뉴를 Today’s Meal에서 체크하면 여기에 쌓여요.</p>`}
+    ${eaten ? `<p class="gh">방금 먹은 것</p><ul class="rows faded">${eaten}</ul>` : ""}</div>`;
+  el.hidden = false;
+  el.querySelector(".panel").scrollTop = keep;
+}
 function renderSheet() {
   const el = $("sheet");
   if (!S.sheet) { el.hidden = true; el.innerHTML = ""; return; }
+  if (S.sheet === "stock") return renderStock(el);
   let body = "";
   for (const m of Object.keys(MEALS)) pickedRests(S.date, m).forEach((x, ri, arr) => {
     const k = keyOf(S.date, m, x.id), s = S.picks[k]?.items || {};
@@ -781,15 +855,23 @@ function renderSheet() {
     const md = modeOf(S.date, m), mk = `${S.date}-${m}`;
     const rk = arr.length > 1 && md === "rank" ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${mk}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
     if (ri > 0) body += `<div class="join"><span class="sg" role="group" aria-label="두 식당의 관계">${[["rank", "순위"], ["or", "또는"], ["and", "그리고"]].map(([v, t]) => `<button data-mode="${v}" data-mk="${mk}" aria-pressed="${md === v}">${t}</button>`).join("")}</span></div>`;
-    const ate = arr.length > 1 && md !== "and" ? `<button class="ate" data-ate="${mk}" data-rid="${x.id}" aria-pressed="${S.ate[mk] === x.id}">${S.ate[mk] === x.id ? "먹었어요" : "이걸로 먹었어요"}</button>` : "";
+    const got = S.picks[k]?.got || {}, need = Object.keys(s).filter((n) => !isSide(by[n])), done = need.length > 0 && need.every((n) => got[n]);
+    const ate = `<button class="ate" data-gotall="${esc(k)}" aria-pressed="${done}">${done ? "테이크아웃 완료" : "모두 가져옴"}</button>`;
     body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span>${ate}<button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
         const label = it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm;
-        return `<li class="${tied ? "tied" : ""}"><span class="sname"><span>${label}</span>${coin}</span>
-          <span class="rq"><button data-sub="${nm}" data-k="${esc(k)}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" data-k="${esc(k)}" aria-label="하나 더">+</button></span>
-          <button class="del" data-del="${nm}" data-k="${esc(k)}" aria-label="${nm} 빼기">×</button></li>`;
+        const side = isSide(it), g = got[name], ke = esc(k);
+        const lead = side ? `<span class="gsp"></span>`
+          : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}" aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
+        const sub = side ? "" : g === "swap"
+          ? `<span class="swp"><input class="swapin" data-k="${ke}" data-n="${nm}" maxlength="40" placeholder="무엇으로 바꿨나요?" value="${esc(S.picks[k]?.swapTo?.[name] || "")}"><button class="lnk" data-ungot="${nm}" data-k="${ke}">취소</button></span>`
+          : g ? "" : `<button class="lnk" data-swap="${nm}" data-k="${ke}">다른 걸로 바꿨어요</button>`;
+        const right = g ? `<span class="gst">${g === "ok" ? "가져옴" : "바꿈"}</span><span></span>`
+          : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">+</button></span>
+          <button class="del" data-del="${nm}" data-k="${ke}" aria-label="${nm} 빼기">×</button>`;
+        return `<li class="${tied ? "tied" : ""}${g ? " got" : ""}">${lead}<span class="sbody"><span class="sname"><span>${label}${q > 1 && g ? ` ×${q}` : ""}</span>${coin}</span>${sub}</span>${right}</li>`;
       }).join("") + "</ul>";
   });
   if (body) body = `<input class="memo" id="memo" maxlength="60" placeholder="메모 (예: 품절이면 2순위로)" value="${esc(S.memo[S.date] || "")}">` + body;
@@ -984,7 +1066,15 @@ function handle(e) {
 // click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
 document.addEventListener("click", (e) => handle(e), true);
 // 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
-document.addEventListener("input", (e) => { if (e.target.id === "memo") { S.memo[S.date] = e.target.value; save(); } });
+document.addEventListener("input", (e) => {
+  if (e.target.id === "memo") { S.memo[S.date] = e.target.value; save(); }
+  if (e.target.classList?.contains("swapin")) { // 바꾼 메뉴 이름 — 재고에도 그 이름으로 올린다
+    const k = e.target.dataset.k, n = e.target.dataset.n, p = S.picks[k]; if (!p) return;
+    (p.swapTo || (p.swapTo = {}))[n] = e.target.value;
+    const st = S.stock.find((x) => x.src === `${k}|${n}`); if (st) st.n = e.target.value.trim();
+    save(); $("stockbtn").innerHTML = `Stock${stockCount() ? ` <b>${stockCount()}</b>` : ""}`;
+  }
+});
 function onTap(e) {
   const ph = e.target.closest("[data-photo]");
   if (ph) { // 큰 사진
@@ -1005,8 +1095,30 @@ function onTap(e) {
     S.rank[key] = b.classList.contains("first") && other ? other.id : b.dataset.rid;
     save(); render(); return;
   }
-  if (b.dataset.clear) { delete S.picks[b.dataset.clear]; save(); render(); return; }
-  if (b.dataset.del != null) { const p = S.picks[k]; if (p?.items) { delete p.items[b.dataset.del]; p.sent = false; } save(); render(); return; }
+  if (b.id === "stockbtn") { S.sheet = "stock"; renderSheet(); return; }
+  if (b.dataset.eat != null) { // 먹었어요: 하나씩 줄고, 다 먹으면 사라진다
+    const e = S.stock.find((x) => x.src === b.dataset.eat); if (!e) return;
+    S.eaten.push({ ...e, q: 1 }); S.eaten = S.eaten.slice(-20);
+    if (e.q > 1) e.q -= 1; else S.stock = S.stock.filter((x) => x !== e);
+    save(); render(); return;
+  }
+  if (b.dataset.uneat != null) { // 되돌리기
+    const e = S.eaten[+b.dataset.uneat]; if (!e) return;
+    S.eaten.splice(+b.dataset.uneat, 1);
+    const cur = S.stock.find((x) => x.src === e.src); if (cur) cur.q = (cur.q || 1) + 1; else S.stock.push({ ...e, q: 1 });
+    save(); render(); return;
+  }
+  if (b.dataset.got != null) { setGot(k, b.dataset.got, S.picks[k]?.got?.[b.dataset.got] ? null : "ok"); save(); render(); return; }
+  if (b.dataset.ungot != null) { unGot(k, b.dataset.ungot); save(); render(); return; }
+  if (b.dataset.swap != null) { setGot(k, b.dataset.swap, "swap"); save(); render(); requestAnimationFrame(() => document.querySelector(`.swapin[data-n="${CSS.escape(b.dataset.swap)}"]`)?.focus()); return; }
+  if (b.dataset.gotall) { // 한 번에 체크 / 다시 누르면 전부 해제
+    const kk = b.dataset.gotall, p = S.picks[kk]; if (!p) return;
+    if (b.getAttribute("aria-pressed") === "true") unGotAll(kk);
+    else for (const n of Object.keys(p.items || {})) if (!p.got?.[n]) setGot(kk, n, "ok");
+    save(); render(); return;
+  }
+  if (b.dataset.clear) { unGotAll(b.dataset.clear); delete S.picks[b.dataset.clear]; save(); render(); return; }
+  if (b.dataset.del != null) { const p = S.picks[k]; unGot(k, b.dataset.del); if (p?.items) { delete p.items[b.dataset.del]; p.sent = false; } save(); render(); return; }
   if (b.dataset.rest) { S.rest = b.dataset.rest; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
   if (b.dataset.date) { S.date = b.dataset.date; S.cat = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }
@@ -1021,6 +1133,7 @@ function onTap(e) {
     const items = {};
     for (const it of c.items) items[it.name] = (items[it.name] || 0) + 1;
     if (c.drink) items[c.drink.name] = portionsOf(k);
+    unGotAll(k);
     if (comboOn(c, S.picks[k]?.items || {})) delete S.picks[k]; // 다시 누르면 비운다
     else S.picks[k] = { items, sent: false };
     save(); render(); return;
@@ -1034,7 +1147,7 @@ function onTap(e) {
     const p = S.picks[k] || (S.picks[k] = { items: {} });
     if (!p.items || typeof p.items !== "object") p.items = {};
     const n = b.dataset.tog;
-    if (p.items[n]) delete p.items[n]; else p.items[n] = 1;
+    if (p.items[n]) { unGot(k, n); delete p.items[n]; } else p.items[n] = 1;
     p.sent = false; save(); render(); return;
   }
   if (b.dataset.add != null || b.dataset.sub != null) {
@@ -1042,7 +1155,7 @@ function onTap(e) {
     if (!p.items || typeof p.items !== "object") p.items = {};
     const n = b.dataset.add ?? b.dataset.sub;
     p.items[n] = Math.max(0, (p.items[n] || 0) + (b.dataset.add != null ? 1 : -1));
-    if (!p.items[n]) delete p.items[n];
+    if (!p.items[n]) { unGot(k, n); delete p.items[n]; }
     p.sent = false;
     save(); render();
   }

@@ -477,8 +477,11 @@ function catName(course, names) {
 }
 // 간식 묶음에 섞여 들어온 생과일은 '과일'로 옮긴다 (젤리·주스·말랭이·요거트 같은 가공품은 그대로)
 const FRUIT = /오렌지|자몽|감귤|귤$|사과|바나나|방울토마토|토마토|단감|키위|포도|샤인머스캣|블루베리|딸기|망고|파인애플|멜론|수박|복숭아|자두|체리|용과|황금향|한라봉|천혜향|과일|과채/;
-const NOT_FRUIT = /젤리|주스|즙|드링크|요거|요구르트|말랭이|칩|맛$|빵|케이크|케익|스무디|에이드|잼|샐러드|샌드위치|우유|두유|쉐이크|바$|파이|타르트|스프|파스타|소스/;
+const NOT_FRUIT = /젤리|주스|즙|드링크|요거|요구르트|말랭이|칩|맛$|빵|베이글|머핀|스콘|쿠키|크래커|와플|도넛|크루아상|크로와상|마들렌|휘낭시에|떡|롤|그래놀라|시리얼|초코|푸딩|라떼|콤부차|워터|티$|케이크|케익|스무디|에이드|잼|샐러드|샌드위치|우유|두유|쉐이크|바$|파이|타르트|스프|파스타|소스/;
 const fruitFix = (cat, name) => (/간식|기타|컵푸드|사이드/.test(cat) && FRUIT.test(name) && !NOT_FRUIT.test(name) ? "과일" : cat);
+// 간식·사이드 묶음에 섞여 나온 빵은 '빵'으로 옮긴다
+const BREAD = /베이글|머핀|스콘|크루아상|크로와상|소금빵|깜빠뉴|식빵|모닝빵|치아바타|브리오슈/;
+const breadFix = (cat, name) => (/간식|기타|컵푸드|사이드/.test(cat) && BREAD.test(name) && !/샌드위치|칩|맛\)?$/.test(name) ? "빵" : cat);
 // 간식·밥 묶음에 섞여 나온 떡은 '떡'으로 옮긴다 (떡볶이·떡국·호떡·인절미맛 과자는 그대로)
 const TTEOK = /시루떡|가래떡|찹쌀떡|인절미|절편|설기|송편|경단|약과|떡$|떡\s*\(/;
 const NOT_TTEOK = /떡볶이|떡국|떡갈비|호떡|맛탕|맛\)?$|롤|빵|바$|김밥|칩/;
@@ -515,7 +518,7 @@ function itemsFor(d, m, rid = S.rest) {
       // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
       const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
       if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
-      seen.set(nm, { name: nm, sold, cat: tteokFix(fruitFix(cat, nm), nm), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
     }
   }
   const list = [...seen.values()];

@@ -242,6 +242,15 @@ main .gutter { padding-block: 20px calc(170px + env(safe-area-inset-bottom, 0px)
 .sold { display: inline-block; font-style: normal; font-size: 10px; font-weight: 600; line-height: 16px; padding: 0 6px; margin-right: 6px; border-radius: 999px; background: var(--well); color: var(--muted); vertical-align: 1px; white-space: nowrap; }
 .rsub { display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 1.2; color: var(--muted); min-width: 0; }
 .rsub .coin { min-height: 0; flex: none; }
+/* 보조 줄은 한 줄로: 설명은 길면 말줄임, 가격은 항상 끝까지 보인다 */
+.rsub .st { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rsub .dotsep, .rsub .pr { flex: none; }
+.rsub .dotsep { margin: 0 -4px; }
+.radd .rt { min-width: 0; }
+/* 떠 있는 미터와 내비 뒤로 목록이 비쳐 어지럽지 않게, 아래를 바탕색으로 덮는다 */
+body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: calc(96px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--bg) 62%, transparent); pointer-events: none; z-index: 5; }
+body.tab-menu::after { height: calc(176px + env(safe-area-inset-bottom, 0px)); }
+body.tab-cart::after, body.tab-stock::after { height: calc(220px + env(safe-area-inset-bottom, 0px)); }
 .rsub .coin i { width: 6px; height: 6px; }
 .rq { display: inline-flex; align-items: center; font-size: 14px; font-variant-numeric: tabular-nums; }
 .rq:not(:empty) { background: var(--well); border-radius: 999px; padding: 2px; }
@@ -591,7 +600,9 @@ const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" ari
 const MINUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7"/></svg>', PLUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7M6 2.500v7"/></svg>';
 const won = (it) => (it?.price ? `${it.est ? "약\u00a0" : ""}${it.price.toLocaleString("ko-KR")}\u2060원` : "");
 // 가격은 누르면 출처가 뜬다(줄 전체가 담기 버튼이라, 가격만 따로 받는다)
-const priceTag = (it, sub) => (it?.price ? `<span class="pr" data-price="${esc(it.name)}">${sub ? " · " : ""}${won(it)}</span>` : "");
+const priceTag = (it, sub) => (it?.price ? `${sub ? '<span class="dotsep"> · </span>' : ""}<span class="pr" data-price="${esc(it.name)}">${won(it)}</span>` : "");
+// 수제 탭에서는 줄마다 '수제'를 되풀이하지 않는다
+const noHand = (t) => (S.cat === "수제" && S.q == null ? t.replace(/(^| · )수제(?= · |$)/, "").replace(/^ · /, "") : t);
 const SOLD = /^[*\s\[(]*품절[\])\s:·-]*/;
 const soldChip = (it) => (it?.sold ? '<i class="sold">품절</i>' : "");
 const cache = new Map();
@@ -912,12 +923,12 @@ function gridBody(list, sel, f, isHidden) {
 function rowHtml(it, q, plain) {
   const nm = esc(it.name);
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, tagText(it), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}${esc(sub)}${priceTag(it, sub)}</span></span>${photoBtn(it)}
+      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span></span>${photoBtn(it)}
     </button>
     <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">${PLUS}</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>

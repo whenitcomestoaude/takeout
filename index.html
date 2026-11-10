@@ -228,6 +228,7 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .rows li.on .lead svg { opacity: 1; }
 .rt { display: grid; gap: 7px; min-width: 0; }
 .rname { font-size: 14px; line-height: 1.3; font-weight: 400; overflow-wrap: anywhere; }
+.sold { display: inline-block; font-style: normal; font-size: 10px; font-weight: 600; line-height: 16px; padding: 0 6px; margin-right: 6px; border-radius: 999px; background: var(--well); color: var(--muted); vertical-align: 1px; white-space: nowrap; }
 .rsub { display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 1.2; color: var(--muted); min-width: 0; }
 .rsub .coin { min-height: 0; flex: none; }
 .rsub .coin i { width: 6px; height: 6px; }
@@ -482,6 +483,8 @@ function probePhotos(p) {
 const photoBtn = (it) => (S.canPhoto && it.photo ? `<span class="ph" role="button" data-photo="${esc(it.name)}" aria-label="${esc(it.name)} 사진"><img loading="lazy" alt="" src="${esc(thumbOf(it.photo))}"></span>` : "");
 const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
+const SOLD = /^[*\s\[(]*품절[\])\s:·-]*/;
+const soldChip = (it) => (it?.sold ? '<i class="sold">품절</i>' : "");
 const cache = new Map();
 function itemsFor(d, m, rid = S.rest) {
   const k = keyOf(d, m, rid);
@@ -497,7 +500,12 @@ function itemsFor(d, m, rid = S.rest) {
   const seen = new Map();
   for (const rows of groups.values()) {
     const cat = /음료/.test(rows[0].c) ? "음료" : catName(rows[0].c, rows.map((r) => r.n));
-    for (const r of rows) if (!seen.has(r.n)) seen.set(r.n, { name: r.n, cat: tteokFix(fruitFix(cat, r.n), r.n), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+    for (const r of rows) {
+      // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
+      const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
+      if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
+      seen.set(nm, { name: nm, sold, cat: tteokFix(fruitFix(cat, nm), nm), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+    }
   }
   const list = [...seen.values()];
   cache.set(k, list);
@@ -725,7 +733,7 @@ function rowHtml(it, q, plain) {
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="rt"><span class="rname">${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}${esc(sub)}</span></span>${photoBtn(it)}
+      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}${esc(sub)}</span></span>${photoBtn(it)}
     </button>
     <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">+</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
@@ -810,7 +818,7 @@ function tile(it, q, times, hidden) {
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="nrow">${photoBtn(it)}<span class="name">${n}</span></span>
+      <span class="nrow">${photoBtn(it)}<span class="name">${soldChip(it)}${n}</span></span>
       <span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span>${esc(sub)}</span></span>
     </button>
     <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
@@ -926,7 +934,7 @@ function renderSheet() {
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
-        const label = it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm;
+        const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm);
         const side = isSide(it), g = got[name], ke = esc(k);
         const lead = side ? `<span class="gsp"></span>`
           : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;

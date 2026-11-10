@@ -870,15 +870,17 @@ function drawCard(d) {
     y += 26;
     for (const [ii, it] of b.rows.entries()) {
       const ry = y; if (it.drink) used.drink = true; else if (!it.tag && it.coin) used.coin = true;
-      font(600, 10); const tagW = (it.tag ? cx.measureText(it.tag).width + 12 + 8 : 0) + (it.frozen ? cx.measureText("Frozen").width + 12 + (it.tag ? 4 : 8) : 0); font(400, 15);
+      font(600, 10); const tagW = it.tag ? cx.measureText(it.tag).width + 12 + 8 : 0, frzW = it.frozen ? cx.measureText("Frozen").width + 12 + 6 : 0; font(400, 15);
       const right = (it.tag ? 0 : (it.drink ? 1 : it.coin) * 11 + 10) + tagW;
-      const ls = wrap(it.text, W - 2 * P - right - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0));
+      const ls = wrap(it.text, W - 2 * P - right - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0) - frzW);
       ops.push(() => { ls.forEach((ln, i) => { const ly = ry + 15 + i * 22; let x = P;
           if (it.side) { if (i === 0) { font(600, 15); cx.fillStyle = ORANGE; cx.fillText("+", x, ly); } x += 12; }
           font(400, 15); cx.fillStyle = it.side ? MUTED : INK; cx.fillText(ln, x, ly);
-          if (i === ls.length - 1 && it.q > 1) { // 수량은 이름 뒤 작은 칩으로
-            const tx = x + cx.measureText(ln).width + 6, t = `×${it.q}`; font(600, 11); const tw = cx.measureText(t).width;
-            cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(tx, ly - 14.5, tw + 12, 18, 9); cx.fill(); cx.fillStyle = OLIVE; cx.textBaseline = "middle"; cx.fillText(t, tx + 6, ly - 5); cx.textBaseline = "alphabetic"; } });
+          if (i === ls.length - 1 && (it.frozen || it.q > 1)) { // 이름 뒤 작은 칩: Frozen(테두리), 수량(머스터드)
+            let tx = x + cx.measureText(ln).width + 6; cx.textBaseline = "middle";
+            if (it.frozen) { font(600, 10); const w = cx.measureText("Frozen").width + 12; cx.beginPath(); cx.roundRect(tx + .5, ly - 13.500, w, 16, 8); cx.lineWidth = 1; cx.strokeStyle = OLIVE; cx.stroke(); cx.fillStyle = OLIVE; cx.fillText("Frozen", tx + 6.500, ly - 5); tx += w + 5; }
+            if (it.q > 1) { const t = `×${it.q}`; font(600, 11); const tw = cx.measureText(t).width; cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(tx, ly - 14.500, tw + 12, 18, 9); cx.fill(); cx.fillStyle = OLIVE; cx.fillText(t, tx + 6, ly - 5); }
+            cx.textBaseline = "alphabetic"; } });
         // 오른쪽 끝: Deli · Side · Pick 글자 + 코인 동그라미 (Pick 은 머스터드, 음료는 빈 원)
         const n = it.tag ? 0 : it.drink ? 1 : it.coin, cy = ry + 10; // Deli·Side·Pick 칩이 있으면 동그라미 대신 그 자리에 칩
         for (let k = 0; k < n; k++) { const dx = W - P - 4 - (n - 1 - k) * 11; cx.beginPath(); cx.arc(dx, cy, 3.5, 0, Math.PI * 2);
@@ -888,7 +890,6 @@ function drawCard(d) {
         const chip = (t, bg, fg, line) => { const w = cx.measureText(t).width + 12, x0 = cxr - w; cx.beginPath(); cx.roundRect(x0, cy - 8, w, 16, 8);
           if (line) { cx.lineWidth = 1; cx.strokeStyle = line; cx.stroke(); } else { cx.fillStyle = bg; cx.fill(); } cx.fillStyle = fg; cx.fillText(t, x0 + 6, cy + .5); cxr = x0 - 4; };
         if (it.tag) chip(it.tag, ...(it.tag === "Deli" ? [OLIVE, "#fff"] : it.tag === "Pick" ? [MUSTARD, "#fff"] : ["rgba(29,27,20,.08)", INK]));
-        if (it.frozen) chip("Frozen", null, OLIVE, OLIVE);
         cx.textBaseline = "alphabetic"; });
       y += ls.length * 22 + (b.rows[ii + 1]?.side ? 0 : 8); // 곁들임은 윗줄에 바짝 붙인다
     }

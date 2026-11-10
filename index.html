@@ -395,6 +395,10 @@ function catName(course, names) {
   if (rc >= names.length * .5) return "밥·죽";
   return "간식·요거트";
 }
+// 간식 묶음에 섞여 들어온 생과일은 '과일'로 옮긴다 (젤리·주스·말랭이·요거트 같은 가공품은 그대로)
+const FRUIT = /오렌지|자몽|감귤|귤$|사과|바나나|방울토마토|토마토|단감|키위|포도|샤인머스캣|블루베리|딸기|망고|파인애플|멜론|수박|복숭아|자두|체리|용과|황금향|한라봉|천혜향|과일|과채/;
+const NOT_FRUIT = /젤리|주스|즙|드링크|요거|요구르트|말랭이|칩|맛$|빵|케이크|케익|스무디|에이드|잼|샐러드|샌드위치|우유|두유|쉐이크|바$|파이|타르트|스프|파스타|소스/;
+const fruitFix = (cat, name) => (/간식|기타|컵푸드|사이드/.test(cat) && FRUIT.test(name) && !NOT_FRUIT.test(name) ? "과일" : cat);
 const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
 const cache = new Map();
@@ -412,7 +416,7 @@ function itemsFor(d, m, rid = S.rest) {
   const seen = new Map();
   for (const rows of groups.values()) {
     const cat = /음료/.test(rows[0].c) ? "음료" : catName(rows[0].c, rows.map((r) => r.n));
-    for (const r of rows) if (!seen.has(r.n)) seen.set(r.n, { name: r.n, cat, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+    for (const r of rows) if (!seen.has(r.n)) seen.set(r.n, { name: r.n, cat: fruitFix(cat, r.n), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
   }
   const list = [...seen.values()];
   cache.set(k, list);

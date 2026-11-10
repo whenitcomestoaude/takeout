@@ -350,7 +350,14 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .sheet .sname span:first-child { overflow-wrap: anywhere; }
 .sheet .sname .coin i { width: 7px; height: 7px; }
 .sheet .del { width: 36px; height: 44px; color: var(--muted); font: 400 17px/1 var(--sans); text-align: center; }
-.sheet .memo { width: 100%; margin-top: 12px; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 15px var(--sans); }
+.sheet .gh { margin: 16px 0 8px; }
+.sheet .fin { margin-left: auto; margin-right: 12px; font-size: 11px; font-weight: 600; color: var(--gold-deep); }
+.rows.fin .gchk { opacity: .55; }
+.rows.fin .rq, .rows.fin .del { display: none; }
+.fbar { position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom, 0px)); margin: 20px -16px 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--page); border-top: .5px solid var(--line); display: grid; gap: 8px; }
+.fbar .copy { width: 100%; }
+.fbar p { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
+.sheet .memo { width: 100%; margin-top: 0; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 15px var(--sans); }
 .sheet .memo::placeholder { color: var(--muted); }
 .sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
 .sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
@@ -477,18 +484,29 @@ function unGot(k, name) {
   if (p?.got) delete p.got[name];
   if (p?.swapTo) delete p.swapTo[name];
   S.stock = S.stock.filter((e) => e.src !== `${k}|${name}`);
+  if (p && !Object.keys(p.got || {}).length) p.done = false;
 }
 const unGotAll = (k) => { for (const n of Object.keys(S.picks[k]?.got || {})) unGot(k, n); };
-function setGot(k, name, state) {
+function setGot(k, name, state) { // 표시만 한다 — 재고와 횟수는 "테이크아웃 완료"를 눌러야 반영된다
   unGot(k, name);
   const p = S.picks[k]; if (!state || !p?.items?.[name]) return;
   (p.got || (p.got = {}))[name] = state;
-  const [r, dm] = k.split("|"), d = dm.slice(0, 8), m = dm.slice(9);
-  const it = itemsFor(d, m, r).find((x) => x.name === name);
-  if (it && isSide(it)) return; // 소스 같은 곁들임은 재고로 세지 않는다
-  S.stock.push({ src: `${k}|${name}`, n: state === "swap" ? "" : name, from: state === "swap" ? name : null, q: p.items[name], d, m,
-    r: S.rests.find((x) => x.id === r)?.name || r, fz: it?.cat === "냉동", t: Date.now() });
 }
+// 확정: 그 날짜에 체크해 둔 것을 재고에 올리고 끼니를 잠근다
+const pendingKeys = (d) => Object.keys(S.picks).filter((k) => k.split("|")[1].slice(0, 8) === d && !S.picks[k].done && Object.keys(S.picks[k].got || {}).length);
+function commitDay(d) {
+  for (const k of pendingKeys(d)) {
+    const p = S.picks[k], [r, dm] = k.split("|"), m = dm.slice(9), items = itemsFor(d, m, r);
+    for (const [name, state] of Object.entries(p.got)) {
+      const it = items.find((x) => x.name === name);
+      if (!p.items?.[name] || (it && isSide(it))) continue; // 소스 같은 곁들임은 재고로 세지 않는다
+      S.stock.push({ src: `${k}|${name}`, n: state === "swap" ? (p.swapTo?.[name] || "").trim() : name, from: state === "swap" ? name : null, q: p.items[name], d, m,
+        r: S.rests.find((x) => x.id === r)?.name || r, fz: it?.cat === "냉동", t: Date.now() });
+    }
+    p.done = true;
+  }
+}
+function uncommit(k) { const p = S.picks[k]; if (!p) return; S.stock = S.stock.filter((e) => !e.src.startsWith(`${k}|`)); p.done = false; }
 const stockName = (e) => e.n || `${e.from} 대신 가져온 것`;
 const stockCount = () => S.stock.reduce((a, e) => a + (e.q || 1), 0);
 // 먹은 횟수: 픽업 체크가 있는 끼니는 실제로 가져온 것만 센다. 체크가 없으면 보낸 것을 세되,
@@ -497,14 +515,14 @@ function counts(k) {
   const [r, dm] = k.split("|");
   const rivals = Object.keys(S.picks).filter((o) => o !== k && o.split("|")[1] === dm && Object.keys(S.picks[o]?.items || {}).length);
   if (!rivals.length || (S.mode[dm] || "or") === "and") return true;
-  if (rivals.some((o) => Object.keys(S.picks[o]?.got || {}).length)) return false; // 다른 쪽을 가져왔다
+  if (rivals.some((o) => S.picks[o]?.done)) return false; // 다른 쪽을 가져왔다
   return S.ate[dm] === r;
 }
 function freq() {
   const f = {};
   for (const [k, p] of Object.entries(S.picks)) {
     const got = p.got || {};
-    if (Object.keys(got).length) { for (const [n, st] of Object.entries(got)) if (st === "ok" && p.items?.[n]) f[n] = (f[n] || 0) + 1; }
+    if (p.done) { for (const [n, st] of Object.entries(got)) if (st === "ok" && p.items?.[n]) f[n] = (f[n] || 0) + 1; }
     else if (p.sent && counts(k)) for (const n of Object.keys(p.items || {})) f[n] = (f[n] || 0) + 1;
   }
   return f;
@@ -856,25 +874,29 @@ function renderSheet() {
     const rk = arr.length > 1 && md === "rank" ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${mk}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
     if (ri > 0) body += `<div class="join"><span class="sg" role="group" aria-label="두 식당의 관계">${[["rank", "순위"], ["or", "또는"], ["and", "그리고"]].map(([v, t]) => `<button data-mode="${v}" data-mk="${mk}" aria-pressed="${md === v}">${t}</button>`).join("")}</span></div>`;
     const got = S.picks[k]?.got || {}, need = Object.keys(s).filter((n) => !isSide(by[n])), done = need.length > 0 && need.every((n) => got[n]);
-    const ate = `<button class="ate" data-gotall="${esc(k)}" aria-pressed="${done}">${done ? "테이크아웃 완료" : "모두 가져옴"}</button>`;
-    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span>${ate}<button class="clr" data-clear="${esc(k)}">비우기</button></h3><ul class="rows">` +
+    const fin = !!S.picks[k]?.done;
+    const ate = fin ? `<span class="fin">테이크아웃 완료</span><button class="clr" data-undone="${esc(k)}">취소</button>`
+      : `<button class="ate" data-gotall="${esc(k)}" aria-pressed="${done}">전체 선택</button><button class="clr" data-clear="${esc(k)}">비우기</button>`;
+    body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span>${ate}</h3><ul class="rows${fin ? " fin" : ""}">` +
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
         const label = it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm;
         const side = isSide(it), g = got[name], ke = esc(k);
         const lead = side ? `<span class="gsp"></span>`
-          : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}" aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
+          : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
         const sub = side ? "" : g === "swap"
-          ? `<span class="swp"><input class="swapin" data-k="${ke}" data-n="${nm}" maxlength="40" placeholder="무엇으로 바꿨나요?" value="${esc(S.picks[k]?.swapTo?.[name] || "")}"><button class="lnk" data-ungot="${nm}" data-k="${ke}">취소</button></span>`
-          : g ? "" : `<button class="lnk" data-swap="${nm}" data-k="${ke}">다른 걸로 바꿨어요</button>`;
+          ? `<span class="swp"><input class="swapin" data-k="${ke}" data-n="${nm}" maxlength="40" placeholder="무엇으로 바꿨나요?"${fin ? " disabled" : ""} value="${esc(S.picks[k]?.swapTo?.[name] || "")}">${fin ? "" : `<button class="lnk" data-ungot="${nm}" data-k="${ke}">취소</button>`}</span>`
+          : g || fin ? "" : `<button class="lnk" data-swap="${nm}" data-k="${ke}">수정</button>`;
         const right = g ? `<span class="gst">${g === "ok" ? "가져옴" : "바꿈"}</span><span></span>`
           : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">+</button></span>
           <button class="del" data-del="${nm}" data-k="${ke}" aria-label="${nm} 빼기">×</button>`;
         return `<li class="${tied ? "tied" : ""}${g ? " got" : ""}">${lead}<span class="sbody"><span class="sname"><span>${label}${q > 1 && g ? ` ×${q}` : ""}</span>${coin}</span>${sub}</span>${right}</li>`;
       }).join("") + "</ul>";
   });
-  if (body) body = `<input class="memo" id="memo" maxlength="60" placeholder="메모 (예: 품절이면 2순위로)" value="${esc(S.memo[S.date] || "")}">` + body;
+  const pend = pendingKeys(S.date).length;
+  if (body) body = `<p class="gh">메모</p><input class="memo" id="memo" maxlength="60" placeholder="예: 품절이면 2순위로" value="${esc(S.memo[S.date] || "")}">` + body
+    + `<div class="fbar"><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>가져온 메뉴를 체크하고 누르면 재고에 올라가요</p></div>`;
   const keep = el.querySelector(".panel")?.scrollTop || 0;
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button>
     <div class="panel" role="dialog" aria-label="담은 메뉴"><div class="grab"></div>
@@ -1071,8 +1093,7 @@ document.addEventListener("input", (e) => {
   if (e.target.classList?.contains("swapin")) { // 바꾼 메뉴 이름 — 재고에도 그 이름으로 올린다
     const k = e.target.dataset.k, n = e.target.dataset.n, p = S.picks[k]; if (!p) return;
     (p.swapTo || (p.swapTo = {}))[n] = e.target.value;
-    const st = S.stock.find((x) => x.src === `${k}|${n}`); if (st) st.n = e.target.value.trim();
-    save(); $("stockbtn").innerHTML = `Stock${stockCount() ? ` <b>${stockCount()}</b>` : ""}`;
+    save();
   }
 });
 function onTap(e) {
@@ -1108,11 +1129,14 @@ function onTap(e) {
     const cur = S.stock.find((x) => x.src === e.src); if (cur) cur.q = (cur.q || 1) + 1; else S.stock.push({ ...e, q: 1 });
     save(); render(); return;
   }
+  if (b.id === "takedone") { commitDay(S.date); save(); render(); toast("재고에 올렸어요"); return; }
+  if (b.dataset.undone) { uncommit(b.dataset.undone); save(); render(); return; }
   if (b.dataset.got != null) { setGot(k, b.dataset.got, S.picks[k]?.got?.[b.dataset.got] ? null : "ok"); save(); render(); return; }
   if (b.dataset.ungot != null) { unGot(k, b.dataset.ungot); save(); render(); return; }
   if (b.dataset.swap != null) { setGot(k, b.dataset.swap, "swap"); save(); render(); requestAnimationFrame(() => document.querySelector(`.swapin[data-n="${CSS.escape(b.dataset.swap)}"]`)?.focus()); return; }
   if (b.dataset.gotall) { // 한 번에 체크 / 다시 누르면 전부 해제
     const kk = b.dataset.gotall, p = S.picks[kk]; if (!p) return;
+    if (p.done) return;
     if (b.getAttribute("aria-pressed") === "true") unGotAll(kk);
     else for (const n of Object.keys(p.items || {})) if (!p.got?.[n]) setGot(kk, n, "ok");
     save(); render(); return;

@@ -12,6 +12,7 @@
   const ns = {
     mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }),
       sync: async () => j(await fetch(url("sync"), { cache: "no-store" })),
+      setPrice: async (name, price) => j(await fetch(`${API.replace("takeout-api", "takeout-price")}?k=${encodeURIComponent(k)}&api=set`, { method: "POST", body: JSON.stringify({ name, price }) })),
       ping: async (id) => j(await fetch(`${url("ping")}&id=${encodeURIComponent(id)}`, { cache: "no-store" })) }, // 새로고침 버튼: 식당 메뉴를 지금 다시 받아 온다
     user: { id: async () => "shared" },
     db: { doc: () => ({

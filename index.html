@@ -776,7 +776,7 @@ const anyPicks = (d) => S.rests.some((x) => Object.keys(MEALS).some((m) => Objec
 // ---------- message ----------
 function message(d) {
   const out = [];
-  if ((S.memo[d] || "").trim()) out.push(`📝 ${S.memo[d].trim()}`);
+  if ((S.memo[d] || "").trim()) out.push(`${MEMO_TO} ${S.memo[d].trim()}`);
   for (const m of Object.keys(MEALS)) for (const [ri, x] of pickedRests(d, m).entries()) {
     const k = keyOf(d, m, x.id), sel = S.picks[k]?.items || {};
     const multi = pickedRests(d, m).length > 1, md = modeOf(d, m);
@@ -802,6 +802,7 @@ function message(d) {
   }
   return out.join("\n\n");
 }
+const MEMO_TO = "Dear 충토."; // 메모 앞에 붙는 받는 사람
 // ---------- image card ----------
 // 카톡에 그대로 올릴 수 있는 한 장: 날짜 제목 → 끼니·식당별로 진열대 순서의 메뉴
 function cardBlocks(d) {
@@ -848,8 +849,10 @@ function drawCard(d) {
   ops.push(() => { font(600, 34); cx.fillStyle = INK; cx.textBaseline = "alphabetic"; const day = String(+d.slice(6, 8)); cx.fillText(day, P, P + 30); const w = cx.measureText(day).width;
     font(600, 17); cx.fillText(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][ymd(d).getUTCDay()], P + w + 8, P + 30);
     font(600, 11); cx.fillStyle = MUTED; cx.textAlign = "right"; cx.fillText("TODAY’S MEAL", W - P, P + 30); cx.textAlign = "left"; });
-  if (memo) { font(400, 15); const ls = wrap(memo, W - 2 * P - 28), my = y + 14, h = ls.length * 22 + 20;
-    ops.push(() => { cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(P, my, W - 2 * P, h, 12); cx.fill(); font(400, 15); cx.fillStyle = INK; ls.forEach((ln, i) => cx.fillText(ln, P + 14, my + 26 + i * 22)); });
+  if (memo) { font(400, 15); const ls = wrap(memo, W - 2 * P - 28), my = y + 14, h = ls.length * 22 + 20 + 20;
+    ops.push(() => { cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(P, my, W - 2 * P, h, 12); cx.fill();
+      font(600, 11); cx.fillStyle = OLIVE; cx.fillText(MEMO_TO, P + 14, my + 22);
+      font(400, 15); cx.fillStyle = INK; ls.forEach((ln, i) => cx.fillText(ln, P + 14, my + 46 + i * 22)); });
     y += h + 14; }
   y += 20;
   blocks.forEach((b, bi) => {
@@ -866,9 +869,9 @@ function drawCard(d) {
       if (b.extra > 0) pill(`추가취식 +${b.extra}`, W - P, hy - 1, SOFT, OLIVE, true); });
     y += 26;
     for (const [ii, it] of b.rows.entries()) {
-      const ry = y; if (it.drink) used.drink = true; else if (it.pick) used.pick = true; else if (it.coin) used.coin = true;
+      const ry = y; if (it.drink) used.drink = true; else if (!it.tag && it.coin) used.coin = true;
       font(600, 10); const tagW = (it.tag ? cx.measureText(it.tag).width + 12 + 8 : 0) + (it.frozen ? cx.measureText("Frozen").width + 12 + (it.tag ? 4 : 8) : 0); font(400, 15);
-      const right = (it.drink ? 1 : it.coin) * 11 + 10 + tagW;
+      const right = (it.tag ? 0 : (it.drink ? 1 : it.coin) * 11 + 10) + tagW;
       const ls = wrap(it.text, W - 2 * P - right - (it.side ? 12 : 0) - (it.q > 1 ? 34 : 0));
       ops.push(() => { ls.forEach((ln, i) => { const ly = ry + 15 + i * 22; let x = P;
           if (it.side) { if (i === 0) { font(600, 15); cx.fillStyle = ORANGE; cx.fillText("+", x, ly); } x += 12; }
@@ -877,11 +880,11 @@ function drawCard(d) {
             const tx = x + cx.measureText(ln).width + 6, t = `×${it.q}`; font(600, 11); const tw = cx.measureText(t).width;
             cx.fillStyle = SOFT; cx.beginPath(); cx.roundRect(tx, ly - 14.5, tw + 12, 18, 9); cx.fill(); cx.fillStyle = OLIVE; cx.textBaseline = "middle"; cx.fillText(t, tx + 6, ly - 5); cx.textBaseline = "alphabetic"; } });
         // 오른쪽 끝: Deli · Side · Pick 글자 + 코인 동그라미 (Pick 은 머스터드, 음료는 빈 원)
-        const n = it.drink ? 1 : it.coin, cy = ry + 10;
+        const n = it.tag ? 0 : it.drink ? 1 : it.coin, cy = ry + 10; // Deli·Side·Pick 칩이 있으면 동그라미 대신 그 자리에 칩
         for (let k = 0; k < n; k++) { const dx = W - P - 4 - (n - 1 - k) * 11; cx.beginPath(); cx.arc(dx, cy, 3.5, 0, Math.PI * 2);
           if (it.drink) { cx.lineWidth = 1.3; cx.strokeStyle = OLIVE; cx.stroke(); } else { cx.fillStyle = it.pick ? MUSTARD : OLIVE; cx.fill(); } }
         // 칩: 현장 구분(Deli 올리브 · Side 회색 · Pick 머스터드) + 냉동이면 Frozen(테두리)
-        let cxr = W - P - n * 11 - 8; font(600, 10); cx.textBaseline = "middle";
+        let cxr = n ? W - P - n * 11 - 8 : W - P; font(600, 10); cx.textBaseline = "middle";
         const chip = (t, bg, fg, line) => { const w = cx.measureText(t).width + 12, x0 = cxr - w; cx.beginPath(); cx.roundRect(x0, cy - 8, w, 16, 8);
           if (line) { cx.lineWidth = 1; cx.strokeStyle = line; cx.stroke(); } else { cx.fillStyle = bg; cx.fill(); } cx.fillStyle = fg; cx.fillText(t, x0 + 6, cy + .5); cxr = x0 - 4; };
         if (it.tag) chip(it.tag, ...(it.tag === "Deli" ? [OLIVE, "#fff"] : it.tag === "Pick" ? [MUSTARD, "#fff"] : ["rgba(29,27,20,.08)", INK]));

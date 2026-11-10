@@ -82,7 +82,7 @@
   --band-dim: rgba(251, 245, 236, .62);
   --gold: #EBDD8E;
   --gold-deep: #5B5121;
-  --sel: #FCE2C3;
+  --sel: #FCE2C3; --viz-save: #77670F; --viz-paid: #E0703A;
   --sel-ink: #2A2510;
   --btn: #5B5121;
   --btn-ink: #FFFFFF;
@@ -101,13 +101,13 @@
   :root:not([data-theme="light"]) {
     --bg: #121210; --tile: #2A2922; --page: #121210; --card: #1C1B17; --ink: #F3ECDD; --muted: rgba(243, 236, 221, .58); --line: rgba(243, 236, 221, .13);
     --band: #2B2610; --band-ink: #F3ECDD; --band-dim: rgba(243, 236, 221, .5); --gold: #E6D588; --gold-deep: #CDB84A;
-    --sel: #F6DDB8; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
+    --sel: #F6DDB8; --viz-save: #7A6B14; --viz-paid: #D87244; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121210; --tile: #2A2922; --page: #121210; --card: #1C1B17; --ink: #F3ECDD; --muted: rgba(243, 236, 221, .58); --line: rgba(243, 236, 221, .13);
     --band: #2B2610; --band-ink: #F3ECDD; --band-dim: rgba(243, 236, 221, .5); --gold: #E6D588; --gold-deep: #CDB84A;
-    --sel: #F6DDB8; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
+    --sel: #F6DDB8; --viz-save: #7A6B14; --viz-paid: #D87244; --sel-ink: #2A2510; --btn: #CDB84A; --btn-ink: #17150C; --edge: rgba(205, 184, 74, .38); --soft: #353017; --warn: #F0774A; --heart: #F0774A; --coin: #DDD3A8; --well: rgba(243, 236, 221, .08); --coin-pick: #BFA732; --mark: rgba(230, 213, 136, .3); color-scheme: dark;
 }
 * { box-sizing: border-box; }
 button { touch-action: manipulation; }
@@ -309,7 +309,31 @@ body.tab-cart main .gutter, body.tab-stock main .gutter { padding-bottom: calc(2
 .rep-hero b { display: block; margin: 6px 0 8px; font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -.02em; }
 .rep-hero span { font-size: 12px; color: var(--muted); }
 .sheet .rep .rows li { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; min-height: 48px; padding: 0 16px; font-size: 14px; }
-.rep .bar { height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; }
+.stk { display: flex; gap: 2px; height: 10px; min-width: 8px; }
+.stk i, .colb i { display: block; min-width: 3px; min-height: 3px; }
+.stk i:first-child { border-radius: 4px 0 0 4px; } .stk i:last-child { border-radius: 0 4px 4px 0; } .stk i:only-child { border-radius: 4px; }
+i.sv { background: var(--viz-save); } i.pd { background: var(--viz-paid); }
+.cmp { background: var(--card); border-radius: 14px; padding: 16px; display: grid; gap: 12px; }
+.cmp-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--muted); }
+.cmp-h b { font-size: 17px; font-weight: 600; color: var(--ink); }
+.cmp-bar .stk { height: 14px; }
+.lg { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 20px; background: none !important; border-radius: 0 !important; }
+.sheet .rep .lg li { display: inline-flex; align-items: center; gap: 6px; min-height: 0; padding: 0; font-size: 12px; color: var(--muted); }
+.sheet .rep .lg li::before { display: none; }
+.lg i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.lg b { font-weight: 600; color: var(--ink); margin-left: 2px; }
+.daily { background: var(--card); border-radius: 14px; padding: 12px 12px 14px; }
+.dmax { font-size: 10px; color: var(--muted); padding: 0 4px 6px; border-bottom: .5px dashed var(--line); }
+.cols { display: flex; align-items: flex-end; gap: 2px; height: 96px; border-bottom: .5px solid var(--line); }
+.col { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; padding: 0; }
+.colb { width: 100%; max-width: 14px; display: flex; flex-direction: column; gap: 2px; }
+.colb i:first-child { border-radius: 4px 4px 0 0; }
+.col.on[aria-pressed="false"] .colb { opacity: .5; }
+.ticks { display: flex; gap: 2px; margin-top: 4px; }
+.ticks span { flex: 1; min-width: 0; text-align: center; font-size: 9px; color: var(--muted); white-space: nowrap; overflow: visible; }
+.dsel { margin: 12px 4px 0; font-size: 12px; color: var(--muted); }
+.dsel b { color: var(--ink); font-weight: 600; margin-right: 6px; }
+.rep .rows .stk { height: 8px; }
 .rep .bar i { display: block; height: 100%; border-radius: 3px; background: var(--btn); }
 .sheet .rep .rows li em { font-style: normal; font-size: 12px; color: var(--muted); }
 .sheet .rep .rows.val li { grid-template-columns: minmax(0, 1fr) auto; }
@@ -1099,6 +1123,31 @@ function renderRatings(el) {
 }
 // Report: 가져온 것의 시중가에서 낸 돈(추가취식 1회 3,000원)을 뺀 값을 달마다 모은다
 const EXTRA_FEE = 3000;
+// 가로 막대 하나를 지출 + 아낀 금액으로 나눠 쌓는다(합이 실질 가치). 조각 사이는 2px 띄운다.
+const stackBar = (x, max) => { const w = Math.max(0, x.worth), pd = Math.min(x.paid, w), sv = w - pd, scale = max ? w / max : 1;
+  return `<span class="stk" style="width:${Math.max(4, scale * 100)}%">${pd ? `<i class="pd" style="flex:${pd}"></i>` : ""}${sv ? `<i class="sv" style="flex:${sv}"></i>` : ""}</span>`; };
+// 이 달의 실질 가치와 지출 비교
+function cmpHtml(m) {
+  const saved = Math.max(0, m.worth - m.paid);
+  return `<section class="cmp" aria-label="실질 가치와 지출"><div class="cmp-h"><span>실질 가치</span><b>약 ${wonN(m.worth)}</b></div>
+    <div class="cmp-bar">${stackBar(m, m.worth)}</div>
+    <ul class="lg"><li><i class="pd"></i>지출<b>${wonN(m.paid)}</b></li><li><i class="sv"></i>아낀 금액<b>약 ${wonN(saved)}</b></li></ul></section>`;
+}
+// 날짜별 막대: 한 칸이 하루. 누르면 그날 값이 아래에 나온다.
+function dailyHtml(ym, days) {
+  const y = +ym.slice(0, 4), mo = +ym.slice(4), n = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const has = Object.keys(days).filter((d) => d.startsWith(ym)).sort();
+  if (!has.length) return "";
+  if (!has.includes(S.repDay)) S.repDay = has[has.length - 1];
+  const max = Math.max(...has.map((d) => days[d].worth), 1), sel = days[S.repDay];
+  const cols = Array.from({ length: n }, (_, i) => { const d = ym + String(i + 1).padStart(2, "0"), x = days[d];
+    if (!x) return `<span class="col"></span>`;
+    const h = Math.max(6, Math.round(x.worth / max * 100)), pd = Math.min(x.paid, x.worth), sv = x.worth - pd;
+    return `<button class="col on" data-rday="${d}" aria-pressed="${d === S.repDay}" aria-label="${i + 1}일 실질 가치 ${wonN(x.worth)}, 지출 ${wonN(x.paid)}"><span class="colb" style="height:${h}%">${sv ? `<i class="sv" style="flex:${sv}"></i>` : ""}${pd ? `<i class="pd" style="flex:${pd}"></i>` : ""}</span></button>`; }).join("");
+  const ticks = Array.from({ length: n }, (_, i) => `<span>${i === 0 || (i + 1) % 5 === 0 ? i + 1 : ""}</span>`).join("");
+  return `<p class="gh">날짜별</p><section class="daily"><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="ticks">${ticks}</div>
+    <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼</p></section>`;
+}
 const wonN = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
 function renderReport(el) {
   const months = {};
@@ -1111,6 +1160,15 @@ function renderReport(el) {
     mth.por[dm] = (mth.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
   }
   for (const mth of Object.values(months)) { mth.meals = Object.values(mth.por).reduce((x, n) => x + n, 0); /* 끼 수는 가져온 인분 수 */ mth.paid = Object.values(mth.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
+  // 날짜별: 실질 가치(시중가)와 지출
+  const days = {};
+  for (const [k, p] of Object.entries(S.picks)) {
+    if (!p.done || !p.val) continue;
+    const dm = k.split("|")[1].split("#")[0], d = dm.slice(0, 8), x = (days[d] ||= { worth: 0, por: {} });
+    for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) x.worth += p.val[nm] * (p.items?.[nm] || 1);
+    x.por[dm] = (x.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
+  }
+  for (const x of Object.values(days)) { x.meals = Object.values(x.por).reduce((a, n) => a + n, 0); x.paid = Object.values(x.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
   const now = todayYmd().slice(0, 6);
   const keys = Object.keys(months).sort().reverse(), tabs = [...new Set([now, ...keys])].sort().reverse().slice(0, 4);
   if (!tabs.includes(S.repMonth)) S.repMonth = now;
@@ -1130,9 +1188,10 @@ function renderReport(el) {
     <div class="sum">${keys.length ? `지금까지 <b>약 ${wonN(total)}</b>` : ""}</div></div>`;
   el.innerHTML = `<div class="panel rep">
     <div class="rep-hero"><small>${+cur.slice(4)}월에 아낀 금액</small><b>${m0.meals ? `약 ${wonN(m0.worth - m0.paid)}` : "–"}</b>
-      <span>${m0.meals ? `시중가 약 ${wonN(m0.worth)} − 낸 돈 ${wonN(m0.paid)} · ${m0.meals}끼` : "테이크아웃한 식사가 없습니다."}</span></div>
-    ${keys.length ? `<p class="gh">월별${keys.length > 1 ? ` · 모두 약 ${wonN(total)}` : ""}</p><ul class="rows">${keys.map((ym) => { const x = months[ym], v = x.worth - x.paid;
-      return `<li><span>${+ym.slice(4)}월</span><span class="bar"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span><span>약 ${wonN(v)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
+      <span>${m0.meals ? `${m0.meals}끼${m0.paid ? ` · 지출의 ${(m0.worth / m0.paid).toFixed(1)}배 가치` : " · 지출 없음"}` : "테이크아웃한 식사가 없습니다."}</span></div>
+    ${m0.meals ? cmpHtml(m0) + dailyHtml(cur, days) : ""}
+    ${keys.length > 1 ? `<p class="gh">월별</p><ul class="rows">${keys.map((ym) => { const x = months[ym], mx = Math.max(1, ...keys.map((y) => months[y].worth));
+      return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
     ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? wonN(g.v * g.q) : "–"}</span></li>`).join("")}</ul>` : ""}
     ${keys.length || got.length ? `<p class="none">시중가는 AI 검색 결과로 추정치입니다.</p>` : ""}</div>`;
   el.hidden = false;
@@ -1386,6 +1445,7 @@ function onTap(e) {
   if (!b) { if (e.target.closest(".tray")) goTab("cart"); return; }
   if (b.dataset.nav) { goTab(b.dataset.nav); return; }
   if (b.dataset.scat != null) { S.stockCat = b.dataset.scat || null; renderSheet(); return; }
+  if (b.dataset.rday) { S.repDay = b.dataset.rday; renderSheet(); return; }
   if (b.dataset.rmonth) { S.repMonth = b.dataset.rmonth; renderSheet(); return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { $("sheet").hidden = true; $("sheet").innerHTML = ""; return; }

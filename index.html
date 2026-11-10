@@ -208,7 +208,7 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .gh { margin: 24px 16px 8px; font-size: 13px; color: var(--muted); }
 .gh:first-of-type { margin-top: 0; }
 .rows { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 14px; overflow: hidden; }
-.rows li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 40px; align-items: center; min-height: 60px; padding-left: 16px; }
+.rows li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto 40px; align-items: center; min-height: 60px; padding-left: 16px; }
 .rows li + li::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: .5px; background: var(--line); }
 .radd { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 12px; min-width: 0; padding: 14px 8px 14px 0; }
 .radd .lead { margin-top: -1px; } /* 체크 원을 이름 첫 줄의 가운데에 */
@@ -291,6 +291,16 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 /* sheet */
 .sheet { position: fixed; inset: 0; z-index: 9; display: grid; align-items: end; }
 .sheet[hidden] { display: none; }
+/* 사진: 작은 미리보기 → 누르면 크게 */
+.ph { width: 34px; height: 34px; border-radius: 9px; overflow: hidden; background: var(--well); flex: none; }
+.ph img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.tile .ph { position: absolute; top: 10px; right: 44px; }
+.phs { display: flex; padding-right: 8px; }
+.phs:empty { padding: 0; }
+.photo { position: fixed; inset: 0; z-index: 12; background: rgba(20, 18, 8, .82); display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px; width: 100%; height: 100%; }
+.photo[hidden] { display: none; }
+.photo img { max-width: min(92vw, 560px); max-height: 72vh; border-radius: 14px; background: #fff; pointer-events: none; }
+.photo span { color: #fff; font-size: 15px; font-weight: 600; text-align: center; pointer-events: none; }
 .sheet .scrim { position: absolute; inset: 0; width: 100%; height: 100%; background: rgba(20, 18, 8, .4); }
 .sheet .panel { position: relative; background: var(--page); border-radius: 14px 14px 0 0; max-height: 76vh; overflow-y: auto; overscroll-behavior: contain; padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 .sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 8px; }
@@ -349,6 +359,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
   </div>
 </div>
 <div class="sheet" id="sheet" hidden></div>
+<button class="photo" id="photo" hidden aria-label="사진 닫기"></button>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -356,7 +367,7 @@ const PROJECT = "omigzdxdxywtjsfzimks";
 const MEALS = { "1": "아침", "3": "저녁" };
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
-  select restaurant_code r, restaurant_name rn, menu_dt d, meal m, course c, course_type ct, name n, coin, round(kcal) k, handmade hm, tag tg, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') u
+  select restaurant_code r, restaurant_name rn, menu_dt d, meal m, course c, course_type ct, name n, coin, round(kcal) k, handmade hm, tag tg, photo p, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI"Z"') u
   from welstory.menu_item
   where takeout and meal in ('1','3') and restaurant_code <> 'CAF05'
     and menu_dt >= to_char(now() at time zone 'Asia/Seoul', 'YYYYMMDD')
@@ -399,6 +410,14 @@ function catName(course, names) {
 const FRUIT = /오렌지|자몽|감귤|귤$|사과|바나나|방울토마토|토마토|단감|키위|포도|샤인머스캣|블루베리|딸기|망고|파인애플|멜론|수박|복숭아|자두|체리|용과|황금향|한라봉|천혜향|과일|과채/;
 const NOT_FRUIT = /젤리|주스|즙|드링크|요거|요구르트|말랭이|칩|맛$|빵|케이크|케익|스무디|에이드|잼|샐러드|샌드위치|우유|두유|쉐이크|바$|파이|타르트|스프|파스타|소스/;
 const fruitFix = (cat, name) => (/간식|기타|컵푸드|사이드/.test(cat) && FRUIT.test(name) && !NOT_FRUIT.test(name) ? "과일" : cat);
+// PlanEAT 사진: 묶음의 대표 메뉴에만 있다. 외부 이미지를 막는 화면(아티팩트)에서는 한 장 시험해 보고 조용히 끈다.
+const PHOTO_BASE = "https://m.planeatchoice.net";
+const thumbOf = (p) => PHOTO_BASE + p.replace(/\/([^/]+)$/, "/thumb/$1");
+function probePhotos(p) {
+  if (S.photoProbe || !p) return; S.photoProbe = true;
+  const im = new Image(); im.onload = () => { S.canPhoto = true; render(); }; im.src = thumbOf(p);
+}
+const photoBtn = (it) => (S.canPhoto && it.photo ? `<button class="ph" data-photo="${esc(it.name)}" aria-label="${esc(it.name)} 사진"><img loading="lazy" alt="" src="${esc(thumbOf(it.photo))}"></button>` : "");
 const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
 const cache = new Map();
@@ -416,7 +435,7 @@ function itemsFor(d, m, rid = S.rest) {
   const seen = new Map();
   for (const rows of groups.values()) {
     const cat = /음료/.test(rows[0].c) ? "음료" : catName(rows[0].c, rows.map((r) => r.n));
-    for (const r of rows) if (!seen.has(r.n)) seen.set(r.n, { name: r.n, cat: fruitFix(cat, r.n), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+    for (const r of rows) if (!seen.has(r.n)) seen.set(r.n, { name: r.n, cat: fruitFix(cat, r.n), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
   }
   const list = [...seen.values()];
   cache.set(k, list);
@@ -507,6 +526,7 @@ function render() {
   if (!meals.includes(S.meal)) S.meal = defaultMeal(meals);
   const k = keyOf(S.date, S.meal);
   const all = itemsFor(S.date, S.meal);
+  probePhotos(all.find((it) => it.photo)?.photo);
   const isPick = (it) => /pick/i.test(it.tag || "");
   const hasPick = all.some(isPick);
   const isHidden = (it) => S.hide.has(it.name) || S.hideCats.has(it.cat);
@@ -595,6 +615,7 @@ function rowHtml(it, q, plain) {
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
       <span class="rt"><span class="rname">${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}${esc(sub)}</span></span>
     </button>
+    <span class="phs">${photoBtn(it)}</span>
     <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">+</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
   </li>`;
@@ -681,7 +702,7 @@ function tile(it, q, times, hidden) {
       <span class="name">${n}</span>
       <span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span>${esc(sub)}</span></span>
     </button>
-    <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
+    ${photoBtn(it)}<button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
     ${q ? `<span class="rq"><button data-sub="${n}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${n}" aria-label="하나 더">+</button></span>` : ""}
   </div>`;
 }
@@ -966,6 +987,11 @@ function onTap(e) {
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
+  if (b.id === "photo") { b.hidden = true; b.innerHTML = ""; return; }
+  if (b.dataset.photo != null) { // 큰 사진
+    const it = itemsFor(S.date, S.meal).find((x) => x.name === b.dataset.photo); if (!it?.photo) return;
+    const el = $("photo"); el.innerHTML = `<img alt="" src="${esc(PHOTO_BASE + it.photo)}"><span>${esc(it.name)}</span>`; el.hidden = false; return;
+  }
   if (b.dataset.ate) { const dm = b.dataset.ate; if (S.ate[dm] === b.dataset.rid) delete S.ate[dm]; else S.ate[dm] = b.dataset.rid; save(); render(); return; }
   if (b.dataset.mode) { S.mode[b.dataset.mk] = b.dataset.mode; save(); render(); return; }
   if (b.dataset.rank) { // 순위 칩: 1순위를 누르면 다른 곳이 1순위로, 2순위를 누르면 그곳이 1순위로

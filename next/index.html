@@ -286,6 +286,7 @@ main .gutter { padding-block: 20px calc(170px + env(safe-area-inset-bottom, 0px)
 body:not(.tab-menu) .rail, body:not(.tab-menu) #meals, body:not(.tab-menu) #rests, body:not(.tab-menu) #list, body:not(.tab-menu) .tray { display: none !important; }
 body.tab-stock .when, body.tab-ratings .when, body.tab-report .when { display: none; }
 .page .fbar.one { grid-template-columns: 1fr; }
+body.tab-cart main .gutter, body.tab-stock main .gutter { padding-bottom: calc(220px + env(safe-area-inset-bottom, 0px)); }
 .althead { padding-block: 0 12px; }
 .althead .when { display: flex !important; }
 .althead .rs { margin-top: 12px; }
@@ -298,7 +299,7 @@ body.tab-stock .when, body.tab-ratings .when, body.tab-report .when { display: n
 .sheet.page { position: static; display: block; z-index: auto; }
 .sheet.page .panel { position: static; background: none; border-radius: 0; max-height: none; overflow: visible; padding: 0; }
 .sheet.page .gh:first-child { margin-top: 0; }
-.page .fbar { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); margin: 24px 0 0; padding: 10px; border: 0; border-radius: 20px; background: var(--tile); box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29,27,20,.14); grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
+.page .fbar { position: fixed; z-index: 6; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); max-width: 616px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; padding: 10px; border: 0; border-radius: 20px; background: var(--tile); box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29,27,20,.14); grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
 .page .fbar p { grid-column: 1 / -1; }
 .page .fbar .shmenu { right: auto; left: 0; }
 .page .fbar .copy.shico { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--well); color: var(--ink); }
@@ -845,7 +846,7 @@ function render() {
   const vbtn = `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
   const legend = S.edit ? "" : searching
     ? `<div class="viewopt"><label class="qbox">${GLASS}<input id="q" type="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="메뉴 검색" value="${esc(S.q)}"></label><button class="vbtn" data-qclose aria-label="검색 닫기"><svg class="ln" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>${vbtn}</div>`
-    : `<div class="viewopt"><span class="vnote">${tabbed ? note : ""}</span><button class="vbtn" data-qopen aria-label="메뉴 검색">${GLASS}</button>${tabbed ? vbtn : ""}</div>`;
+    : `<div class="viewopt"><span class="vnote">${tabbed ? note : "별점, 취식 기록을 참고해서 조합한 추천 메뉴예요."}</span><button class="vbtn" data-qopen aria-label="메뉴 검색">${GLASS}</button>${tabbed ? vbtn : ""}</div>`;
   const bodyOf = (l) => S.view === "list" ? listBody(l, sel, f) : `<div class="grid">${gridBody(l, sel, f, isHidden)}</div>`;
   // 검색: 이 끼니의 모든 분류에서 이름으로 찾는다. 입력 칸은 그대로 두고 결과만 갈아 끼운다(한글 조합이 끊기지 않게).
   S.find = (q) => { const t = q.trim().toLowerCase().replace(/\s+/g, ""); if (!t) return bodyOf(S.cat === "추천" ? [] : list);
@@ -1123,7 +1124,7 @@ function renderReport(el) {
       <span>${m0.meals ? `시중가 약 ${wonN(m0.worth)} − 낸 돈 ${wonN(m0.paid)} · ${m0.meals}끼` : "테이크아웃한 식사가 없습니다."}</span></div>
     ${keys.length ? `<p class="gh">월별${keys.length > 1 ? ` · 모두 약 ${wonN(total)}` : ""}</p><ul class="rows">${keys.map((ym) => { const x = months[ym], v = x.worth - x.paid;
       return `<li><span>${+ym.slice(4)}월</span><span class="bar"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span><span>약 ${wonN(v)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
-    ${best.length ? `<p class="gh">오늘 ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")} ${MEALS[S.meal] || ""} · 코인당 가격</p><ul class="rows val">${best.map(({ it, v }) => `<li><span>${esc(it.name)}</span><span>${it.est ? "약 " : ""}${wonN(v)} <em>/코인</em></span></li>`).join("")}</ul>` : ""}
+    ${best.length ? `<p class="gh">오늘 ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")} ${MEALS[S.meal] || ""} 메뉴 · 코인당 가격 높은 순</p><ul class="rows val">${best.map(({ it, v }) => `<li><span>${esc(it.name)}</span><span>${it.est ? "약 " : ""}${wonN(v)} <em>/코인</em></span></li>`).join("")}</ul>` : ""}
     ${!keys.length && !best.length ? `<p class="none">메뉴에 시중가가 채워지면 계산이 시작돼요.</p>` : `<p class="none">시중가는 AI 검색 결과로 추정치입니다.</p>`}</div>`;
   el.hidden = false;
 }

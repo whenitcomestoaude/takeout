@@ -225,7 +225,7 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .radd { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 14px 8px 14px 0; }
 .radd .lead { flex: none; }
 .radd .rt { flex: 1; }
-.radd .ph { margin: -2px 0 -2px 4px; align-self: center; }
+.radd .ph { margin: -2px 4px -2px 4px; align-self: center; }
 .radd .lead { margin-top: -1px; } /* 체크 원을 이름 첫 줄의 가운데에 */
 .lead { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); display: grid; place-items: center; }
 .lead svg { width: 12px; height: 12px; fill: none; stroke: var(--btn-ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
@@ -239,7 +239,8 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .rsub .coin i { width: 6px; height: 6px; }
 .rq { display: inline-flex; align-items: center; font-size: 14px; font-variant-numeric: tabular-nums; }
 .rq:not(:empty) { background: var(--well); border-radius: 999px; padding: 2px; }
-.rq span { min-width: 20px; text-align: center; }
+.rq span { min-width: 18px; text-align: center; line-height: 28px; font-weight: 400; }
+.rq button svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; pointer-events: none; }
 .rq button { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font: 400 17px/1 var(--sans); }
 .rstar { width: 40px; height: 44px; color: var(--muted); display: grid; place-items: center; }
 .fold { margin-top: 8px; }
@@ -488,6 +489,7 @@ function probePhotos(p) {
 const photoBtn = (it) => (S.canPhoto && it.photo ? `<span class="ph" role="button" data-photo="${esc(it.name)}" aria-label="${esc(it.name)} 사진"><img loading="lazy" alt="" src="${esc(thumbOf(it.photo))}"></span>` : "");
 const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
+const MINUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7"/></svg>', PLUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7M6 2.500v7"/></svg>';
 const SOLD = /^[*\s\[(]*품절[\])\s:·-]*/;
 const soldChip = (it) => (it?.sold ? '<i class="sold">품절</i>' : "");
 const cache = new Map();
@@ -740,7 +742,7 @@ function rowHtml(it, q, plain) {
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
       <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}${esc(sub)}</span></span>${photoBtn(it)}
     </button>
-    <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">+</button>` : ""}</span>
+    <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">${PLUS}</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
   </li>`;
 }
@@ -827,7 +829,7 @@ function tile(it, q, times, hidden) {
       <span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span>${esc(sub)}</span></span>
     </button>
     <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
-    ${q ? `<span class="rq"><button data-sub="${n}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${n}" aria-label="하나 더">+</button></span>` : ""}
+    ${q ? `<span class="rq"><button data-sub="${n}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${n}" aria-label="하나 더">${PLUS}</button></span>` : ""}
   </div>`;
 }
 function renderTray(items, sel, n) {
@@ -945,7 +947,7 @@ function renderSheet() {
           : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
         const sub = "";
         const right = g ? `<span class="gst">${g === "ok" ? "가져옴" : "바꿈"}</span><span></span>`
-          : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="하나 빼기">−</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">+</button></span>
+          : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">${PLUS}</button></span>
           <button class="del" data-del="${nm}" data-k="${ke}" aria-label="${nm} 빼기">×</button>`;
         return `<li class="${tied ? "tied" : ""}${g ? " got" : ""}">${lead}<span class="sbody"><span class="sname"><span>${label}${q > 1 && g ? ` ×${q}` : ""}</span>${coin}</span>${sub}</span>${right}</li>`;
       }).join("") + "</ul>";

@@ -267,7 +267,7 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .sheet .panel { transition: transform .22s ease; }
 .tray::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
 .tray .gutter { display: grid; gap: 12px; padding: 10px 14px 14px 18px; }
-.trow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }
+.trow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .trow[hidden] { display: none; }
 .trow .tl { display: grid; gap: 8px; min-width: 0; }
 #traytabs button { padding: 5px 12px; }
@@ -302,6 +302,11 @@ mark { background: none; color: inherit; }
 mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right: 2px; }
 .copy { padding: 12px 20px; border-radius: 999px; background: var(--btn); color: var(--btn-ink); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; }
 .copy:disabled, .shr:disabled { opacity: .3; cursor: default; }
+.trow .copy { padding: 10px 18px; }
+.shwrap { position: relative; }
+.shmenu { position: absolute; right: 0; bottom: calc(100% + 8px); min-width: 148px; background: var(--tile); border-radius: 14px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29,27,20,.18); overflow: hidden; display: grid; z-index: 2; }
+.shmenu button { padding: 13px 16px; font-size: 14px; font-weight: 400; text-align: left; white-space: nowrap; }
+.shmenu button + button { border-top: .5px solid var(--line); }
 .shr { width: 44px; height: 44px; border-radius: 50%; background: var(--well); display: grid; place-items: center; color: var(--ink); margin-right: -4px; }
 .shr svg { width: 16px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .sheet .shot { display: block; width: 100%; border-radius: 14px; box-shadow: 0 0 0 .5px var(--line); margin-top: 12px; -webkit-touch-callout: default; }
@@ -404,7 +409,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
     </div>
     <div class="trow" id="cartpane">
       <div class="tl"><div class="nums" id="nums" hidden></div><div class="meter" id="meter"></div><div class="note" id="note" hidden></div><div class="chips" id="chips"></div></div>
-      <button class="shr" id="share" aria-label="이미지로 공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><button class="copy" id="copy">복사</button>
+      <span class="shwrap"><button class="copy" id="share" aria-haspopup="true">공유</button><span class="shmenu" id="shmenu" hidden><button id="copy">텍스트로 복사</button><button id="shareimg">이미지로 공유</button></span></span>
     </div>
     <div class="trow" id="stockpane" hidden><div class="chips" id="stockprev"></div></div>
     <textarea id="fallback" hidden aria-label="복사할 내용"></textarea>
@@ -871,8 +876,7 @@ function renderTray(items, sel, n) {
       return `<p class="cur"><b>${days > 0 ? `${days}일째` : "오늘"}</b><span>${esc(stockName(e))}${e.q > 1 ? ` ×${e.q}` : ""}${e.fz ? " · Frozen" : ""}</span></p>`; }).join("") + (l.length > 3 ? `<p><b></b><span>외 ${l.length - 3}가지</span></p>` : "")
       : `<p><b></b><span>집에 남아 있는 게 없어요</span></p>`;
   }
-  $("copy").disabled = $("share").disabled = !anyPicks(S.date);
-  $("copy").textContent = "복사";
+  $("share").disabled = !anyPicks(S.date);
 }
 // 담은 것을 진열대 순서로, 곁들임(소스 등)은 같은 분류의 메뉴 바로 뒤에 붙인다
 const isSide = (it) => it && !it.drink && it.coin == null;
@@ -1171,6 +1175,7 @@ function onTap(e) {
   const b = e.target.closest("button");
   // 트레이는 버튼 말고 어디를 눌러도 목록이 열린다
   if (Date.now() - dragAt < 350) return; // 끌어서 접거나 편 직후의 탭은 무시
+  if (!$("shmenu").hidden && !e.target.closest(".shwrap")) { $("shmenu").hidden = true; return; }
   if (S.trayMin && e.target.closest(".tray") && !b?.dataset.tray && !b?.dataset.portion) { setTrayMin(false); return; }
   if (!b) { if (e.target.closest(".tray")) { S.sheet = S.tray === "stock" ? "stock" : true; renderSheet(); } return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
@@ -1231,8 +1236,9 @@ function onTap(e) {
     else S.picks[k] = { items, sent: false };
     save(); render(); return;
   }
-  if (b.id === "copy") { copy(); return; }
-  if (b.id === "share") { shareImage(); return; }
+  if (b.id === "copy") { $("shmenu").hidden = true; copy(); return; }
+  if (b.id === "shareimg") { $("shmenu").hidden = true; shareImage(); return; }
+  if (b.id === "share") { $("shmenu").hidden = !$("shmenu").hidden; return; }
   if (b.id === "clear") { delete S.picks[k]; save(); render(); return; }
   if (b.id === "reload") { load(true); return; }
   if (b.dataset.star != null) { const n = b.dataset.star; S.fav.has(n) ? S.fav.delete(n) : S.fav.add(n); save(); render(); return; }

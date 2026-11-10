@@ -20,7 +20,8 @@
   };
   const ns = {
     mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }),
-      sync: async () => j(await fetch(url("sync"), { cache: "no-store" })) }, // 새로고침 버튼: 식당 메뉴를 지금 다시 받아 온다
+      sync: async () => j(await fetch(url("sync"), { cache: "no-store" })),
+      ping: async (id) => j(await fetch(`${url("ping")}&id=${encodeURIComponent(id)}`, { cache: "no-store" })) }, // 새로고침 버튼: 식당 메뉴를 지금 다시 받아 온다
     user: { id: async () => "shared" },
     db: { doc: () => ({
       get: async () => { const d = (await j(await fetch(url("state"), { cache: "no-store" }))).data; return { exists: !!d, data: () => d }; },
@@ -131,6 +132,9 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 #stamp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #stamp.busy svg { animation: spin .9s linear infinite; }
 #stamp:disabled { cursor: default; }
+.utilr { display: inline-flex; align-items: center; gap: 2px; }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--heart); animation: live 1.6s ease-in-out infinite; }
+@keyframes live { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .25; transform: scale(.7); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 .when { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .week { display: flex; gap: 16px; align-items: baseline; min-width: 0; }
@@ -399,7 +403,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="top">
 <header class="band">
   <div class="gutter">
-    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><button id="stamp" aria-label="메뉴 새로 가져오기"></button></div>
+    <div class="util"><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="utilr"><i class="live" id="live" hidden role="status" aria-label="다른 기기에서도 보고 있어요"></i><button id="stamp" aria-label="메뉴 새로 가져오기"></button></span></div>
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
   </div>
 </header>
@@ -663,7 +667,21 @@ async function pull() {
     if (J(merged) !== J(theirs)) save();
   } catch (e) { console.warn(e); } finally { S.pulling = false; }
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); beat(); } });
+// 동시 접속: 열려 있는 동안 20초마다 알리고, 다른 기기도 열려 있으면 점을 깜박이며 그쪽 변경을 바로 받아 온다
+let devId = "";
+try { devId = localStorage.getItem("takeout-dev") || ""; if (!devId) { devId = Math.random().toString(36).slice(2, 10); localStorage.setItem("takeout-dev", devId); } } catch (_) { devId = Math.random().toString(36).slice(2, 10); }
+async function beat() {
+  if (document.hidden) return;
+  try {
+    const mcp = await claude.use("mcp");
+    if (!mcp?.ping) return;
+    const others = (await mcp.ping(devId)).others > 0;
+    $("live").hidden = !others;
+    if (others) pull();
+  } catch (_) { $("live").hidden = true; }
+}
+setInterval(beat, 20_000); setTimeout(beat, 1500);
 async function initStore() {
   try {
     const db = await claude.use("db");

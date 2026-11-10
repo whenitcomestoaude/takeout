@@ -362,6 +362,11 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .gchk.sw[aria-pressed="true"] { background: var(--heart); }
 .gchk[aria-pressed="true"] svg { opacity: 1; }
 .gsp { width: 22px; }
+.fold .fold-t { text-transform: uppercase; letter-spacing: .06em; }
+.sheet .rows.rated li { display: block; min-height: 0; padding: 9px 8px 9px 16px; }
+.rows.rated .sbody { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; }
+.rows.rated .sname { min-width: 0; }
+.rows.rated .stars { margin: 0; flex: none; }
 .stars { display: flex; gap: 0; margin: 6px 0 0 -5px; }
 .stars button { width: 28px; height: 26px; display: grid; place-items: center; color: var(--line); }
 .stars button[aria-pressed="true"] { color: var(--coin-pick); }
@@ -1002,12 +1007,18 @@ function renderStock(el) {
       <span class="sbody"><span class="sname"><span>${esc(stockName(e))}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
   }).join("");
   const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span>${starsHtml(stockName(e))}</span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">되돌리기</button></li>`).join("");
+  // 별점을 매긴 메뉴 모두: 높은 점수부터. 펼친 동안에는 순서를 그대로 둬서 고치는 중에 줄이 튀지 않게 한다
+  const names = Object.keys(S.rate);
+  if (!S.rateOpen || !S.rateOrder) S.rateOrder = names.sort((a, b) => S.rate[b] - S.rate[a] || a.localeCompare(b, "ko"));
+  const rated = [...S.rateOrder.filter((nm) => S.rate[nm]), ...names.filter((nm) => !S.rateOrder.includes(nm))].map((nm) => [nm, S.rate[nm]]);
   const keep = el.querySelector(".panel")?.scrollTop || 0;
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button>
     <div class="panel stockp" role="dialog" aria-label="재고"><div class="grab"></div>
     <div class="sh"><b>Stock</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
     ${rows ? `<p class="gh">먹은 건 체크하면 사라져요</p><ul class="rows">${rows}</ul>` : `<p class="none">집에 남아 있는 게 없어요. 가져온 메뉴를 Today’s Meal에서 체크하면 여기에 쌓여요.</p>`}
-    ${eaten ? `<p class="gh">방금 먹은 것 · 별점을 남기면 추천 조합에 반영돼요</p><ul class="rows faded">${eaten}</ul>` : ""}</div>`;
+    ${eaten ? `<p class="gh">방금 먹은 것 · 별점을 남기면 추천 조합에 반영돼요</p><ul class="rows faded">${eaten}</ul>` : ""}
+    ${rated.length ? `<section class="fold"><button class="fold-h" id="ratefold" aria-expanded="${!!S.rateOpen}"><span class="fold-t">Ratings</span><span class="n">${rated.length} ${S.rateOpen ? "−" : "+"}</span></button>
+      ${S.rateOpen ? `<ul class="rows rated">${rated.map(([nm]) => `<li><span class="sbody"><span class="sname"><span>${esc(nm)}</span></span>${starsHtml(nm)}</span></li>`).join("")}</ul>` : ""}</section>` : ""}</div>`;
   el.hidden = false;
   el.querySelector(".panel").scrollTop = keep;
 }
@@ -1336,6 +1347,7 @@ function onTap(e) {
   if (b.dataset.cat) { S.q = null; S.cat = b.dataset.cat; S.catTouched = true; render(); b.scrollIntoView({ inline: "center", block: "nearest" }); return; }
   if (b.dataset.portion) { S.portions[k] = +b.dataset.portion; save(); render(); return; }
   if (b.id === "edit") { S.edit = !S.edit; render(); return; }
+  if (b.id === "ratefold") { S.rateOpen = !S.rateOpen; S.rateOrder = null; renderSheet(); return; }
   if (b.id === "fold") { S.foldOpen = !S.foldOpen; render(); return; }
   if (b.dataset.hide != null) { const n = b.dataset.hide; S.hide.has(n) ? S.hide.delete(n) : S.hide.add(n); save(); render(); return; }
   if (b.dataset.hidecat != null) { const c = b.dataset.hidecat; S.hideCats.has(c) ? S.hideCats.delete(c) : S.hideCats.add(c); save(); render(); return; }

@@ -322,6 +322,7 @@ body.tab-stock .when, body.tab-report .when { display: none; }
 .nums:empty { display: none; }
 .meter { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .worth { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.worth b { font-size: 10px; font-weight: 600; letter-spacing: .06em; margin-right: 4px; }
 .meter { display: grid !important; gap: 6px; }
 .pill .dot { align-self: center; width: 7px; height: 7px; border-radius: 50%; background: currentColor; text-decoration: none; opacity: .7; }
 .pill .dot.o { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
@@ -765,7 +766,7 @@ async function initStore() {
 function worthHtml(items, sel) {
   let sum = 0, est = false;
   for (const it of items) { const q = sel[it.name]; if (q && it.price) { sum += it.price * q; est = est || it.est; } }
-  return sum ? `<span class="worth">시중가 ${est ? "약 " : ""}${sum.toLocaleString("ko-KR")}원</span>` : "";
+  return sum ? `<span class="worth"><b>MARKET PRICE</b> ${est ? "약 " : ""}${sum.toLocaleString("ko-KR")}원</span>` : "";
 }
 // ---------- render ----------
 function render() {
@@ -824,11 +825,11 @@ function render() {
   let head = "";
   if (S.edit) {
     const special = S.cat === "추천" || S.cat === "수제";
-    head = `<div class="editbar"><p class="hint">탭하면 숨기고, 다시 탭하면 돌아와요.</p>${special ? "" :
+    head = `<div class="editbar"><p class="hint">탭해서 숨김/표시 설정을 전환할 수 있어요.</p>${special ? "" :
       `<button class="catoff" data-hidecat="${esc(S.cat)}">${S.hideCats.has(S.cat) ? `${esc(S.cat)} 다시 보이기` : `${esc(S.cat)} 전체 숨기기`}</button>`}</div>`;
   } else if (S.cat === "추천") {
     head = S.combos.length ? combosHtml(S.combos, n, sel) : "";
-    head += liked.length ? foldHtml(liked, sel, f) : `<p class="hint">${heart(false)} 를 눌러두면 조합이 더 잘 맞아요.</p>`;
+    head += liked.length ? foldHtml(liked, sel, f) : `<p class="hint">${heart(false)} 를 누른 메뉴를 우선으로 추천해요.</p>`;
   }
   const searching = S.q != null && !S.edit;
   const tabbed = (S.cat !== "추천" || searching) && !S.edit;
@@ -836,7 +837,7 @@ function render() {
     list: '<svg viewBox="0 0 14 14"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>' };
   const other = S.view === "list" ? "grid" : "list";
   const anyBlk = tabbed && (cats.get(S.cat) || []).some(S.blocked);
-  const note = anyBlk && bud.pickIn ? "Pick을 담아서 남은 코인에 맞는 메뉴만 고를 수 있어요" : S.cat === "수제" ? "오늘 나온 수제 메뉴예요." : "";
+  const note = anyBlk && bud.pickIn ? "SIDE만 고를 수 있어요." : "";
   // 목록 맨 위 한 줄: 왼쪽에 안내, 오른쪽 끝에 보기 전환
   const GLASS = '<svg class="ln" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.2"/><path d="M9.200 9.200 12.500 12.500"/></svg>';
   const vbtn = `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
@@ -1005,9 +1006,9 @@ function renderTray(items, sel, n) {
   }).join("") + worthHtml(items, sel);
 
   const notes = [];
-  if (b.coins > b.cap) notes.push(b.pickIn ? `Pick을 담으면 ${b.cap}코인까지예요` : `${b.cap}코인을 넘었습니다`);
-  else if (b.drinks > b.drinkMax) notes.push(`고를 수 있는 음료는 ${b.drinkMax}개입니다`);
-  else if (b.fixed) notes.push(`음료 ${b.fixed}개는 지정 음료로 나옵니다`);
+  if (b.coins > b.cap) notes.push(`${b.cap}코인 초과`);
+  else if (b.drinks > b.drinkMax) notes.push("음료 개수 초과");
+  else if (b.fixed) notes.push("지정 음료");
   const cnt = Object.values(sel).reduce((a, q) => a + q, 0);
   const noteText = notes.join(" · ");
   $("note").textContent = noteText;
@@ -1067,14 +1068,14 @@ function renderStock(el) {
   $("althead").innerHTML = `<div class="when"><div class="week"><span class="day" aria-pressed="true"><span class="dn">${qty(all)}</span><span class="wl">Items</span></span></div>
     <div class="sum">${all.length ? `가장 오래된 것 <b>${oldest > 0 ? `${oldest}일째` : "오늘"}</b>` : ""}</div></div>
     ${cats.length > 1 ? `<div class="rs"><button data-scat="" aria-pressed="${!S.stockCat}">전체<span class="n">${qty(all)}</span></button>${cats.map((c) => `<button data-scat="${esc(c)}" aria-pressed="${S.stockCat === c}">${esc(c)}<span class="n">${qty(groups.get(c))}</span></button>`).join("")}</div>` : ""}`;
-  const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span>${starsHtml(stockName(e))}</span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">되돌리기</button></li>`).join("");
+  const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span>${starsHtml(stockName(e))}</span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">취소</button></li>`).join("");
   // 별점을 매긴 메뉴 모두: 높은 점수부터. 펼친 동안에는 순서를 그대로 둬서 고치는 중에 줄이 튀지 않게 한다
   const names = Object.keys(S.rate);
   if (!S.rateOpen || !S.rateOrder) S.rateOrder = names.sort((a, b) => S.rate[b] - S.rate[a] || a.localeCompare(b, "ko"));
   const rated = [...S.rateOrder.filter((nm) => S.rate[nm]), ...names.filter((nm) => !S.rateOrder.includes(nm))].map((nm) => [nm, S.rate[nm]]);
   el.innerHTML = `<div class="panel stockp">
-    ${rows || `<p class="none">집에 남아 있는 게 없어요. Cart에서 가져온 메뉴를 체크하고 완료하면 여기에 쌓여요.</p>`}
-    ${eaten ? `<p class="gh">방금 먹은 것 · 별점을 남기면 추천 조합에 반영돼요</p><ul class="rows faded">${eaten}</ul>` : ""}
+    ${rows || `<p class="none">테이크아웃 재고가 없습니다.</p>`}
+    ${eaten ? `<p class="gh">식사 기록 · 별점을 남기면 추천 조합에 반영돼요.</p><ul class="rows faded">${eaten}</ul>` : ""}
     ${rated.length ? `<section class="fold"><button class="fold-h" id="ratefold" aria-expanded="${!!S.rateOpen}"><span class="fold-t">Ratings</span><span class="n">${rated.length} ${S.rateOpen ? "−" : "+"}</span></button>
       ${S.rateOpen ? `<ul class="rows rated">${rated.map(([nm]) => `<li><span class="sbody"><span class="sname"><span>${esc(nm)}</span></span>${starsHtml(nm)}</span></li>`).join("")}</ul>` : ""}</section>` : ""}</div>`;
   el.hidden = false;
@@ -1103,11 +1104,11 @@ function renderReport(el) {
     <div class="sum">${keys.length ? `지금까지 <b>약 ${wonN(total)}</b>` : ""}</div></div>`;
   el.innerHTML = `<div class="panel rep">
     <div class="rep-hero"><small>${+cur.slice(4)}월에 아낀 금액</small><b>${m0.meals ? `약 ${wonN(m0.worth - m0.paid)}` : "–"}</b>
-      <span>${m0.meals ? `시중가 약 ${wonN(m0.worth)} − 낸 돈 ${wonN(m0.paid)} · ${m0.meals}끼` : "테이크아웃 완료한 끼니가 쌓이면 여기에 나와요"}</span></div>
+      <span>${m0.meals ? `시중가 약 ${wonN(m0.worth)} − 낸 돈 ${wonN(m0.paid)} · ${m0.meals}끼` : "테이크아웃한 식사가 없습니다."}</span></div>
     ${keys.length ? `<p class="gh">월별${keys.length > 1 ? ` · 모두 약 ${wonN(total)}` : ""}</p><ul class="rows">${keys.map((ym) => { const x = months[ym], v = x.worth - x.paid;
       return `<li><span>${+ym.slice(4)}월</span><span class="bar"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span><span>약 ${wonN(v)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
-    ${best.length ? `<p class="gh">오늘 ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")} ${MEALS[S.meal] || ""} · 코인당 값어치</p><ul class="rows val">${best.map(({ it, v }) => `<li><span>${esc(it.name)}</span><span>${it.est ? "약 " : ""}${wonN(v)} <em>/코인</em></span></li>`).join("")}</ul>` : ""}
-    ${!keys.length && !best.length ? `<p class="none">메뉴에 시중가가 채워지면 계산이 시작돼요.</p>` : `<p class="none">시중가는 검색 최저가와 추정값이라 어림으로 봐 주세요. 추가취식은 한 번에 ${wonN(EXTRA_FEE)}으로 계산해요.</p>`}</div>`;
+    ${best.length ? `<p class="gh">오늘 ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")} ${MEALS[S.meal] || ""} · 코인당 가격</p><ul class="rows val">${best.map(({ it, v }) => `<li><span>${esc(it.name)}</span><span>${it.est ? "약 " : ""}${wonN(v)} <em>/코인</em></span></li>`).join("")}</ul>` : ""}
+    ${!keys.length && !best.length ? `<p class="none">메뉴에 시중가가 채워지면 계산이 시작돼요.</p>` : `<p class="none">시중가는 AI 검색 결과로 추정치입니다.</p>`}</div>`;
   el.hidden = false;
 }
 function renderSheet() {
@@ -1144,10 +1145,10 @@ function renderSheet() {
       }).join("") + "</ul>";
   });
   const pend = pendingKeys(S.date).length;
-  if (body) body = `<p class="gh">메모</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">` + body
-    + `<div class="fbar"><span class="shwrap"><button class="copy shico" id="share" aria-haspopup="true" aria-label="공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><span class="shmenu" id="shmenu" hidden><button id="copy">텍스트로 복사</button><button id="shareimg">이미지로 공유</button></span></span><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>가져온 메뉴를 체크하고 누르면 Stock으로 옮겨져요</p></div>`;
+  if (body) body = `<p class="gh">전달사항</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">` + body
+    + `<div class="fbar"><span class="shwrap"><button class="copy shico" id="share" aria-haspopup="true" aria-label="공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><span class="shmenu" id="shmenu" hidden><button id="copy">텍스트로 복사</button><button id="shareimg">이미지로 공유</button></span></span><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>테이크아웃 완료한 메뉴는 STOCK에서 관리할 수 있습니다.</p></div>`;
   const open = el.querySelector("#shmenu") && !el.querySelector("#shmenu").hidden;
-  el.innerHTML = `<div class="panel">${body || `<p class="none">이 날짜에 담은 메뉴가 없어요. Menu에서 골라 담으면 여기에 모여요.</p>`}</div>`;
+  el.innerHTML = `<div class="panel">${body || `<p class="none">이 날짜에 담은 메뉴가 없습니다.</p>`}</div>`;
   el.hidden = false;
   if (open && $("shmenu")) $("shmenu").hidden = false;
 }
@@ -1304,7 +1305,7 @@ async function shareImage() {
   const el = $("sheet");
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button><div class="panel" role="dialog" aria-label="이미지"><div class="grab"></div>
     <div class="sh"><b>Today’s Meal</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
-    <img class="shot" alt="담은 메뉴" src="${cv.toDataURL("image/png")}"><p class="shotnote">이미지를 길게 눌러 공유하거나 저장하세요</p></div>`;
+    <img class="shot" alt="담은 메뉴" src="${cv.toDataURL("image/png")}"><p class="shotnote">이미지를 길게 눌러 공유하거나 저장하세요.</p></div>`;
   el.hidden = false; markSent();
 }
 async function copy() {
@@ -1316,7 +1317,7 @@ async function copy() {
   if (!ok) { t.hidden = false; t.value = text; t.focus(); t.select(); } else t.hidden = true;
   for (const x of S.rests) for (const m of Object.keys(MEALS)) { const p = S.picks[keyOf(S.date, m, x.id)]; if (p && Object.keys(p.items || {}).length) p.sent = true; }
   save(); render();
-  toast(ok ? "복사했어요. 카톡에 붙여 넣으세요" : "위 글을 길게 눌러 복사해주세요");
+  toast(ok ? "복사했습니다" : "위 글을 길게 눌러 복사해주세요.");
 }
 function toast(t) { const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2200); }
 
@@ -1391,7 +1392,7 @@ function onTap(e) {
     const cur = S.stock.find((x) => x.src === e.src); if (cur) cur.q = (cur.q || 1) + 1; else S.stock.push({ ...e, q: 1 });
     save(); render(); return;
   }
-  if (b.id === "takedone") { commitDay(S.date); save(); render(); toast("Stock으로 옮겼어요"); return; }
+  if (b.id === "takedone") { commitDay(S.date); save(); render(); toast("STOCK에 추가됨"); return; }
   if (b.dataset.undone) { uncommit(b.dataset.undone); save(); render(); return; }
   if (b.dataset.got != null) { setGot(k, b.dataset.got, S.picks[k]?.got?.[b.dataset.got] ? null : "ok"); save(); render(); return; }
   if (b.dataset.ungot != null) { unGot(k, b.dataset.ungot); save(); render(); return; }
@@ -1458,7 +1459,7 @@ async function refreshMenu() {
   S.syncing = true; setStamp();
   try {
     const mcp = await claude.use("mcp");
-    if (mcp?.sync) await mcp.sync().catch(() => toast("새로 가져오지 못했어요. 저장된 메뉴를 다시 읽을게요")); // 독립 페이지: 식당에서 지금 다시 받아 온다
+    if (mcp?.sync) await mcp.sync().catch(() => toast("새로 가져오지 못했어요. 저장된 메뉴를 다시 읽을게요.")); // 독립 페이지: 식당에서 지금 다시 받아 온다
     await load(true);
   } finally { S.syncing = false; setStamp(); }
 }

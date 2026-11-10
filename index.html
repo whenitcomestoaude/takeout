@@ -896,7 +896,7 @@ function renderSheet() {
       }).join("") + "</ul>";
   });
   const pend = pendingKeys(S.date).length;
-  if (body) body = `<p class="gh">메모</p><input class="memo" id="memo" maxlength="60" placeholder="예: 품절이면 2순위로" value="${esc(S.memo[S.date] || "")}">` + body
+  if (body) body = `<p class="gh">메모</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">` + body
     + `<div class="fbar"><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>가져온 메뉴를 체크하고 누르면 재고에 올라가요</p></div>`;
   const keep = el.querySelector(".panel")?.scrollTop || 0;
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button>

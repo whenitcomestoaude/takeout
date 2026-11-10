@@ -287,6 +287,7 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 
 .nums:empty { display: none; }
 .meter { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.worth { font-size: 11px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 .pill { display: inline-flex; align-items: baseline; gap: 2px; font-size: 12px; color: var(--muted); }
 .pill b { font-size: 16px; font-weight: 600; line-height: 1; color: var(--ink); }
 .pill i { font-size: 12px; font-style: normal; margin-right: 4px; }
@@ -497,6 +498,7 @@ const photoBtn = (it) => (S.canPhoto && it.photo ? `<span class="ph" role="butto
 const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
 const MINUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7"/></svg>', PLUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7M6 2.500v7"/></svg>';
+const won = (it) => (it?.price ? `${it.est ? "약\u00a0" : ""}${it.price.toLocaleString("ko-KR")}원` : "");
 const SOLD = /^[*\s\[(]*품절[\])\s:·-]*/;
 const soldChip = (it) => (it?.sold ? '<i class="sold">품절</i>' : "");
 const cache = new Map();
@@ -518,7 +520,7 @@ function itemsFor(d, m, rid = S.rest) {
       // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
       const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
       if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
-      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+      seen.set(nm, { name: nm, sold, cat: r.pc && CAT_ORDER.includes(r.pc) && cat !== "음료" && cat !== "냉동" && r.pc !== "음료" && r.pc !== "냉동" ? r.pc : breadFix(tteokFix(fruitFix(cat, nm), nm), nm), price: r.pr > 0 ? r.pr : null, est: r.ps === "est", coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
     }
   }
   const list = [...seen.values()];
@@ -706,6 +708,12 @@ async function initStore() {
   } catch (e) { console.warn("store", e); }
 }
 
+// 담은 것의 시중가 합계(값을 아는 것만). 추정가가 하나라도 섞이면 '약'
+function worthHtml(items, sel) {
+  let sum = 0, est = false;
+  for (const it of items) { const q = sel[it.name]; if (q && it.price) { sum += it.price * q; est = est || it.est; } }
+  return sum ? `<span class="worth">시중가 ${est ? "약 " : ""}${sum.toLocaleString("ko-KR")}원</span>` : "";
+}
 // ---------- render ----------
 function render() {
   if (!S.rests.some((x) => x.id === S.rest)) S.rest = S.rests[0]?.id;
@@ -810,7 +818,7 @@ function gridBody(list, sel, f, isHidden) {
 function rowHtml(it, q, plain) {
   const nm = esc(it.name);
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, tagText(it), it.kcal ? `${it.kcal} kcal` : ""].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", plain ? "" : it.cat, tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it)].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
@@ -895,7 +903,7 @@ function tile(it, q, times, hidden) {
   }
   // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" || S.q != null ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : ""].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" || S.q != null ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : "", won(it)].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
@@ -921,7 +929,7 @@ function renderTray(items, sel, n) {
   const drinkCls = st(b.drinks, b.drinkMax, b.drinks > b.drinkMax);
   $("meter").innerHTML =
     `<span class="pill ${coinCls}"><b>${b.coins}</b><i>/${b.base}</i>코인</span>` +
-    `<span class="pill ${drinkCls}"><b>${b.drinks}</b><i>/${b.drinkMax}</i>음료${b.fixed ? `<em>+지정 ${b.fixed}</em>` : ""}</span>`;
+    `<span class="pill ${drinkCls}"><b>${b.drinks}</b><i>/${b.drinkMax}</i>음료${b.fixed ? `<em>+지정 ${b.fixed}</em>` : ""}</span>` + worthHtml(items, sel);
 
   const notes = [];
   if (b.coins > b.cap) notes.push(b.pickIn ? `Pick을 담으면 ${b.cap}코인까지예요` : `${b.cap}코인을 넘었습니다`);

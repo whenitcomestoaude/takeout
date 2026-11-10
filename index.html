@@ -253,7 +253,9 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 
 /* tray */
 .tray { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 6; max-width: 616px; margin: 0 auto; background: var(--tile); border-radius: 26px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29, 27, 20, .14); }
-.tray .gutter { display: grid; gap: 12px; padding: 14px 14px 14px 18px; }
+.tray { cursor: pointer; }
+.tray::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
+.tray .gutter { display: grid; gap: 12px; padding: 10px 14px 14px 18px; }
 .trow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding-top: 12px; border-top: .5px solid var(--line); }
 .tally { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .tl { display: flex; align-items: center; min-width: 0; }
@@ -990,7 +992,8 @@ function onTap(e) {
     const el = $("photo"); el.innerHTML = `<img alt="" src="${esc(PHOTO_BASE + it.photo)}"><span>${esc(it.name)}</span>`; el.hidden = false; return;
   }
   const b = e.target.closest("button");
-  if (!b) { if (e.target.closest("#chips")) { S.sheet = true; renderSheet(); } return; }
+  // 트레이는 버튼 말고 어디를 눌러도 목록이 열린다
+  if (!b) { if (e.target.closest(".tray")) { S.sheet = true; renderSheet(); } return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }

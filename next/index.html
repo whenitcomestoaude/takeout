@@ -1110,7 +1110,7 @@ function renderReport(el) {
     const dm = k.split("|")[1].split("#")[0];
     mth.por[dm] = (mth.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
   }
-  for (const mth of Object.values(months)) { mth.meals = Object.keys(mth.por).length; mth.paid = Object.values(mth.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
+  for (const mth of Object.values(months)) { mth.meals = Object.values(mth.por).reduce((x, n) => x + n, 0); /* 끼 수는 가져온 인분 수 */ mth.paid = Object.values(mth.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
   const now = todayYmd().slice(0, 6);
   const keys = Object.keys(months).sort().reverse(), tabs = [...new Set([now, ...keys])].sort().reverse().slice(0, 4);
   if (!tabs.includes(S.repMonth)) S.repMonth = now;

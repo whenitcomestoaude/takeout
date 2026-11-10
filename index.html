@@ -148,6 +148,12 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 .rs::after { content: ""; flex: none; width: 16px; }
 .vbtn { flex: none; width: 38px; height: 32px; border-radius: 999px; background: var(--well); display: grid; place-items: center; color: var(--ink); }
 .vbtn svg { width: 14px; height: 14px; fill: currentColor; pointer-events: none; }
+svg.ln { fill: none !important; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.viewopt .vbtn + .vbtn { margin-left: -4px; }
+.qbox { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; background: var(--well); color: var(--muted); }
+.qbox svg { width: 14px; height: 14px; flex: none; }
+.qbox input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); font: 400 16px var(--sans); padding: 0; -webkit-appearance: none; appearance: none; }
+.qbox input::-webkit-search-cancel-button { display: none; }
 .rail button[data-cat], .rail .editbtn { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--ink); display: inline-flex; gap: 4px; align-items: center; }
 .rail button .n { font-size: 11px; opacity: .45; }
 .rail button[aria-pressed="true"][data-cat] { background: var(--btn); color: var(--btn-ink); font-weight: 600; }
@@ -163,7 +169,7 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 .hint { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
 .hint .hrt { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; }
 .viewopt { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: -4px 0 16px; }
-.vnote { font-size: 12px; color: var(--muted); min-width: 0; }
+.vnote { flex: 1; font-size: 12px; color: var(--muted); min-width: 0; }
 .viewopt .sg { flex: none; }
 .viewopt .sg { padding: 3px; box-shadow: 0 0 0 .5px var(--line); }
 .viewopt .sg button { width: 36px; padding: 6px 0; display: grid; place-items: center; color: var(--muted); }
@@ -663,14 +669,25 @@ function render() {
     head = S.combos.length ? combosHtml(S.combos, n, sel) : "";
     head += liked.length ? foldHtml(liked, sel, f) : `<p class="hint">${heart(false)} 를 눌러두면 조합이 더 잘 맞아요.</p>`;
   }
-  const tabbed = S.cat !== "추천" && !S.edit;
+  const searching = S.q != null && !S.edit;
+  const tabbed = (S.cat !== "추천" || searching) && !S.edit;
   const ICON = { grid: '<svg viewBox="0 0 14 14"><rect x="1" y="1" width="5" height="5" rx="1.2"/><rect x="8" y="1" width="5" height="5" rx="1.2"/><rect x="1" y="8" width="5" height="5" rx="1.2"/><rect x="8" y="8" width="5" height="5" rx="1.2"/></svg>',
     list: '<svg viewBox="0 0 14 14"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>' };
   const other = S.view === "list" ? "grid" : "list";
   const anyBlk = tabbed && (cats.get(S.cat) || []).some(S.blocked);
   const note = anyBlk ? `${bud.pickIn ? "Pick을 담아서" : "Pick은 3코인이라"} 남은 코인에 맞는 메뉴만 고를 수 있어요` : S.cat === "수제" ? "오늘 나온 수제 메뉴예요." : "";
   // 목록 맨 위 한 줄: 왼쪽에 안내, 오른쪽 끝에 보기 전환
-  const legend = tabbed ? `<div class="viewopt"><span class="vnote">${note}</span><button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button></div>` : "";
+  const GLASS = '<svg class="ln" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.2"/><path d="M9.200 9.200 12.500 12.500"/></svg>';
+  const vbtn = `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
+  const legend = S.edit ? "" : searching
+    ? `<div class="viewopt"><label class="qbox">${GLASS}<input id="q" type="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="메뉴 검색" value="${esc(S.q)}"></label><button class="vbtn" data-qclose aria-label="검색 닫기"><svg class="ln" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>${vbtn}</div>`
+    : `<div class="viewopt"><span class="vnote">${tabbed ? note : ""}</span><button class="vbtn" data-qopen aria-label="메뉴 검색">${GLASS}</button>${tabbed ? vbtn : ""}</div>`;
+  const bodyOf = (l) => S.view === "list" ? listBody(l, sel, f) : `<div class="grid">${gridBody(l, sel, f, isHidden)}</div>`;
+  // 검색: 이 끼니의 모든 분류에서 이름으로 찾는다. 입력 칸은 그대로 두고 결과만 갈아 끼운다(한글 조합이 끊기지 않게).
+  S.find = (q) => { const t = q.trim().toLowerCase().replace(/\s+/g, ""); if (!t) return bodyOf(S.cat === "추천" ? [] : list);
+    const hit = items.filter((it) => it.name.toLowerCase().replace(/\s+/g, "").includes(t)).sort((a, b) => rank(a.cat) - rank(b.cat));
+    return hit.length ? bodyOf(hit) : `<p class="hint">찾는 메뉴가 없어요.</p>`; };
+  if (searching) { $("list").innerHTML = `${legend}<div id="lbody">${S.find(S.q)}</div>`; renderTray(all, sel, n); $("stamp").textContent = S.updated ? `${S.updated} 갱신` : ""; return; }
   if (S.cat === "추천" && !S.edit) { $("list").innerHTML = legend + head; renderTray(all, sel, n); $("stamp").textContent = S.updated ? `${S.updated} 갱신` : ""; return; }
   $("list").innerHTML = list.length || head
     ? `${legend}${head}${tabbed && S.view === "list" ? listBody(list, sel, f) : `<div class="grid">${gridBody(list, sel, f, isHidden)}</div>`}`
@@ -705,7 +722,7 @@ function rowHtml(it, q, plain) {
   </li>`;
 }
 function listBody(list, sel, f) {
-  const plain = S.cat !== "수제";
+  const plain = S.cat !== "수제" && S.q == null;
   const group = (title, l) => l.length ? `${title ? `<p class="gh">${title}</p>` : ""}<ul class="rows">${l.map((it) => rowHtml(it, sel[it.name] || 0, plain)).join("")}</ul>` : "";
   const known = list.filter((it) => S.fav.has(it.name) || f[it.name])
     .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
@@ -778,7 +795,7 @@ function tile(it, q, times, hidden) {
   }
   // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : ""].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", S.cat === "수제" || S.q != null ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
@@ -1106,6 +1123,7 @@ function handle(e) {
 document.addEventListener("click", (e) => handle(e), true);
 // 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
 document.addEventListener("input", (e) => {
+  if (e.target.id === "q") { S.q = e.target.value; const lb = $("lbody"); if (lb) lb.innerHTML = S.find(S.q); return; }
   if (e.target.id === "memo") { S.memo[S.date] = e.target.value; save(); }
   if (e.target.classList?.contains("swapin")) { // 바꾼 메뉴 이름 — 재고에도 그 이름으로 올린다
     const k = e.target.dataset.k, n = e.target.dataset.n, p = S.picks[k]; if (!p) return;
@@ -1124,6 +1142,8 @@ function onTap(e) {
   if (!b) { if (e.target.closest(".tray")) { S.sheet = S.tray === "stock" ? "stock" : true; renderSheet(); } return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }
+  if (b.dataset.qopen != null) { S.q = ""; render(); $("q")?.focus(); return; }
+  if (b.dataset.qclose != null) { S.q = null; render(); return; }
   if (b.dataset.view) { S.view = b.dataset.view; save(); render(); return; }
   if (b.id === "photo") { b.hidden = true; b.innerHTML = ""; return; }
   if (b.dataset.ate) { const dm = b.dataset.ate; if (S.ate[dm] === b.dataset.rid) delete S.ate[dm]; else S.ate[dm] = b.dataset.rid; save(); render(); return; }
@@ -1162,7 +1182,7 @@ function onTap(e) {
   if (b.dataset.rest) { S.rest = b.dataset.rest; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
   if (b.dataset.date) { S.date = b.dataset.date; S.cat = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }
-  if (b.dataset.cat) { S.cat = b.dataset.cat; S.catTouched = true; render(); b.scrollIntoView({ inline: "center", block: "nearest" }); return; }
+  if (b.dataset.cat) { S.q = null; S.cat = b.dataset.cat; S.catTouched = true; render(); b.scrollIntoView({ inline: "center", block: "nearest" }); return; }
   if (b.dataset.portion) { S.portions[k] = +b.dataset.portion; save(); render(); return; }
   if (b.id === "edit") { S.edit = !S.edit; render(); return; }
   if (b.id === "fold") { S.foldOpen = !S.foldOpen; render(); return; }

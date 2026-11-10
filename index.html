@@ -549,8 +549,12 @@ function commitDay(d) {
         r: S.rests.find((x) => x.id === r)?.name || r, fz: it?.cat === "냉동", t: Date.now() });
     }
     p.done = true;
+    // 끝난 끼니는 카트에서 빼고 기록으로만 남긴다(횟수 세기용). 같은 끼니를 다시 담으면 새로 시작한다.
+    S.picks[`${k}#${Date.now().toString(36)}`] = p; delete S.picks[k];
   }
 }
+// 예전 방식으로 카트에 남아 있던 완료 끼니도 기록으로 옮긴다
+function archiveDone() { for (const k of Object.keys(S.picks)) if (S.picks[k]?.done && !k.includes("#")) { S.picks[`${k}#old`] = S.picks[k]; delete S.picks[k]; } }
 function uncommit(k) { const p = S.picks[k]; if (!p) return; S.stock = S.stock.filter((e) => !e.src.startsWith(`${k}|`)); p.done = false; }
 const stockName = (e) => e.n || `${e.from} 대신 가져온 것`;
 const stockCount = () => S.stock.reduce((a, e) => a + (e.q || 1), 0);
@@ -558,7 +562,7 @@ const stockCount = () => S.stock.reduce((a, e) => a + (e.q || 1), 0);
 // 한 끼니에 두 곳을 '또는/순위'로 걸었으면 고른 쪽만 센다.
 function counts(k) {
   const [r, dm] = k.split("|");
-  const rivals = Object.keys(S.picks).filter((o) => o !== k && o.split("|")[1] === dm && Object.keys(S.picks[o]?.items || {}).length);
+  const rivals = Object.keys(S.picks).filter((o) => o.split("|")[0] !== r && o.split("|")[1].split("#")[0] === dm && Object.keys(S.picks[o]?.items || {}).length);
   if (!rivals.length || (S.mode[dm] || "or") === "and") return true;
   if (rivals.some((o) => S.picks[o]?.done)) return false; // 다른 쪽을 가져왔다
   return S.ate[dm] === r;
@@ -639,6 +643,7 @@ function applyState(v) {
   if (v.rest) S.rest = v.rest;
   S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock : []; S.eaten = Array.isArray(v.eaten) ? v.eaten : [];
   S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+  archiveDone();
 }
 const remoteState = async () => { const snap = await docRef.get(); return snap.exists ? norm(snap.data()) : null; };
 function save() {
@@ -950,7 +955,7 @@ function renderTray(items, sel, n) {
   renderSheet();
 // 트레이 탭: Cart(오늘 담은 것) | Stock(집에 있는 것)
   const stockMode = S.tray === "stock";
-  const cartN = Object.keys(S.picks).filter((kk) => kk.split("|")[1].slice(0, 8) === S.date).reduce((a, kk) => a + Object.values(S.picks[kk].items || {}).reduce((x, q) => x + q, 0), 0);
+  const cartN = Object.keys(S.picks).filter((kk) => !kk.includes("#") && kk.split("|")[1].slice(0, 8) === S.date).reduce((a, kk) => a + Object.values(S.picks[kk].items || {}).reduce((x, q) => x + q, 0), 0);
   $("traytabs").innerHTML = [["cart", "Cart", cartN], ["stock", "Stock", stockCount()]].map(([v, t, c]) => `<button data-tray="${v}" aria-pressed="${stockMode === (v === "stock")}">${t}${c ? `<span class="cnt">${c}</span>` : ""}</button>`).join("");
   $("cartpane").hidden = stockMode; $("stockpane").hidden = !stockMode; $("portions").hidden = stockMode;
   if (stockMode) {
@@ -1288,7 +1293,7 @@ function onTap(e) {
     const cur = S.stock.find((x) => x.src === e.src); if (cur) cur.q = (cur.q || 1) + 1; else S.stock.push({ ...e, q: 1 });
     save(); render(); return;
   }
-  if (b.id === "takedone") { commitDay(S.date); save(); render(); toast("재고에 올렸어요"); return; }
+  if (b.id === "takedone") { commitDay(S.date); S.sheet = false; save(); render(); renderSheet(); toast("Stock으로 옮겼어요"); return; }
   if (b.dataset.undone) { uncommit(b.dataset.undone); save(); render(); return; }
   if (b.dataset.got != null) { setGot(k, b.dataset.got, S.picks[k]?.got?.[b.dataset.got] ? null : "ok"); save(); render(); return; }
   if (b.dataset.ungot != null) { unGot(k, b.dataset.ungot); save(); render(); return; }

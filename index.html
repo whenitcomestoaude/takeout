@@ -599,15 +599,71 @@ const modeOf = (d, m) => S.mode[`${d}-${m}`] || "or";
 const JOIN = { or: "또는", rank: "또는", and: "그리고" };
 // 관계·먹은 곳은 기록(picks)이 남아 있는 끼니 것만 둔다 — 횟수를 셀 때 필요하다
 const kept = (o, keys) => { const live = new Set(keys.map((k) => k.split("|")[1])); return Object.fromEntries(Object.entries(o || {}).filter(([k, v]) => v && live.has(k))); };
+// ---------- 저장: 둘이 같은 데이터를 쓴다 ----------
+// 통째로 덮어쓰면 상대가 그사이 고친 것이 지워지므로, 저장 직전과 화면으로 돌아올 때 서버 것을 읽어 와 합친다.
+// 규칙(항목별 3자 병합): 내가 마지막으로 맞춘 뒤(base) 내 쪽에서 바뀐 항목은 내 것, 안 바뀐 항목은 서버 것.
+let base = {};
+const J = (v) => JSON.stringify(v ?? null);
+const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
+function snapshot() {
+  const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
+  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions });
+}
+// 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
+const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
+const norm = (v) => { v = clone(v) || {}; v.picks = mig(v.picks); v.portions = mig(v.portions || v.extra); delete v.extra; return v; };
+function merge3(b, mine, theirs) {
+  const out = { ...theirs, view: mine.view, rest: mine.rest }; // 보기·식당 탭은 기기마다 제 것을 쓴다
+  for (const f of ["picks", "portions", "rank", "mode", "ate", "memo"]) {
+    const B = b[f] || {}, M = mine[f] || {}, T = theirs[f] || {}, o = {};
+    for (const k of new Set([...Object.keys(M), ...Object.keys(T)])) { const v = J(M[k]) !== J(B[k]) ? M[k] : T[k]; if (v !== undefined) o[k] = v; }
+    out[f] = o;
+  }
+  for (const f of ["fav", "hide", "hideCats"]) {
+    const B = new Set(b[f] || []), M = new Set(mine[f] || []), T = new Set(theirs[f] || []);
+    out[f] = [...new Set([...M, ...T])].filter((x) => (M.has(x) !== B.has(x) ? M.has(x) : T.has(x)));
+  }
+  { const id = (e) => e.src || `${e.n}|${e.t}`, idx = (l) => new Map((l || []).map((e) => [id(e), e]));
+    const B = idx(b.stock), M = idx(mine.stock), T = idx(theirs.stock), o = [];
+    for (const k of new Set([...M.keys(), ...T.keys()])) { const v = J(M.get(k)) !== J(B.get(k)) ? M.get(k) : T.get(k); if (v) o.push(v); }
+    out.stock = o.sort((x, y) => (x.t || 0) - (y.t || 0)); }
+  for (const f of ["eaten", "noPick"]) out[f] = J(mine[f]) !== J(b[f]) ? mine[f] : theirs[f];
+  return out;
+}
+function applyState(v) {
+  S.fav = new Set(v.fav || []); S.picks = v.picks || {}; S.portions = v.portions || {};
+  if (v.rest) S.rest = v.rest;
+  S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock : []; S.eaten = Array.isArray(v.eaten) ? v.eaten : [];
+  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+}
+const remoteState = async () => { const snap = await docRef.get(); return snap.exists ? norm(snap.data()) : null; };
 function save() {
   if (!docRef) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
-    try { await docRef.set({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions }); }
-    catch (e) { console.warn(e); }
+    saveTimer = null;
+    try {
+      const mine = snapshot(), theirs = await remoteState();
+      const merged = theirs ? merge3(base, mine, theirs) : mine;
+      if (saveTimer) return; // 읽는 사이 또 고쳤다 — 다음 저장이 이어서 합친다
+      if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) render(); }
+      await docRef.set(merged); base = merged;
+    } catch (e) { console.warn(e); }
   }, 700);
 }
+// 화면으로 돌아올 때: 상대가 고친 것을 받아 온다
+async function pull() {
+  if (!docRef || saveTimer || S.pulling) return;
+  S.pulling = true;
+  try {
+    const theirs = await remoteState(); if (!theirs || saveTimer) return;
+    const mine = snapshot(), merged = merge3(base, mine, theirs);
+    base = theirs;
+    if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) render(); }
+    if (J(merged) !== J(theirs)) save();
+  } catch (e) { console.warn(e); } finally { S.pulling = false; }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) pull(); });
 async function initStore() {
   try {
     const db = await claude.use("db");
@@ -615,16 +671,9 @@ async function initStore() {
     const id = user && (await user.id());
     if (!db || !id) return;
     docRef = db.doc(`data/users/${id}/state`);
-    const snap = await docRef.get();
-    if (snap.exists) {
-      // 스냅샷 데이터는 읽기 전용(frozen)이라 수정하려면 깊은 복사본이 필요하다
-      const v = JSON.parse(JSON.stringify(snap.data() || {}));
-      // 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
-      const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
-      S.fav = new Set(v.fav || []); S.picks = mig(v.picks); S.portions = mig(v.portions || v.extra);
-      if (v.rest) S.rest = v.rest;
-      S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock.map((e) => ({ ...e })) : []; S.eaten = Array.isArray(v.eaten) ? v.eaten.map((e) => ({ ...e })) : [];
-    S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+    const v = await remoteState();
+    if (v) {
+      base = v; applyState(clone(v));
       if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
       if (S.rows.length) render();
     }

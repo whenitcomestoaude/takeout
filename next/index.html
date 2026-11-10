@@ -132,7 +132,8 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 #stamp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #stamp.busy svg { animation: spin .9s linear infinite; }
 #stamp:disabled { cursor: default; }
-.utilr { display: inline-flex; align-items: center; gap: 2px; }
+.utilr { display: inline-flex; align-items: center; gap: 4px; }
+.livew { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--heart); white-space: nowrap; }
 .live { width: 7px; height: 7px; border-radius: 50%; background: var(--heart); animation: live 1.6s ease-in-out infinite; }
 @keyframes live { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .25; transform: scale(.7); } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -460,7 +461,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="top">
 <header class="band">
   <div class="gutter">
-    <div class="util"><b class="ptitle" id="ptitle" hidden></b><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="utilr"><i class="live" id="live" hidden role="status" aria-label="다른 기기에서도 보고 있어요"></i><button id="stamp" aria-label="메뉴 새로 가져오기"></button></span></div>
+    <div class="util"><b class="ptitle" id="ptitle" hidden></b><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="utilr"><span class="livew" id="live" hidden role="status"><i class="live"></i>동시접속중</span><button id="stamp" aria-label="메뉴 새로 가져오기"></button></span></div>
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
   </div>
 </header>

@@ -260,7 +260,11 @@ main .gutter { padding-block: 20px calc(190px + env(safe-area-inset-bottom, 0px)
 
 /* tray */
 .tray { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 6; max-width: 616px; margin: 0 auto; background: var(--tile); border-radius: 26px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29, 27, 20, .14); }
-.tray { cursor: pointer; }
+.tray { cursor: pointer; touch-action: none; transition: transform .22s ease; }
+.tray.min .trow { display: none !important; }
+.tray.min .gutter { padding-bottom: 12px; }
+.sheet .grab, .sheet .sh { touch-action: none; }
+.sheet .panel { transition: transform .22s ease; }
 .tray::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
 .tray .gutter { display: grid; gap: 12px; padding: 10px 14px 14px 18px; }
 .trow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }
@@ -675,7 +679,7 @@ function render() {
     list: '<svg viewBox="0 0 14 14"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>' };
   const other = S.view === "list" ? "grid" : "list";
   const anyBlk = tabbed && (cats.get(S.cat) || []).some(S.blocked);
-  const note = anyBlk ? `${bud.pickIn ? "Pick을 담아서" : "Pick은 3코인이라"} 남은 코인에 맞는 메뉴만 고를 수 있어요` : S.cat === "수제" ? "오늘 나온 수제 메뉴예요." : "";
+  const note = anyBlk && bud.pickIn ? "Pick을 담아서 남은 코인에 맞는 메뉴만 고를 수 있어요" : S.cat === "수제" ? "오늘 나온 수제 메뉴예요." : "";
   // 목록 맨 위 한 줄: 왼쪽에 안내, 오른쪽 끝에 보기 전환
   const GLASS = '<svg class="ln" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4.2"/><path d="M9.200 9.200 12.500 12.500"/></svg>';
   const vbtn = `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
@@ -1131,6 +1135,33 @@ document.addEventListener("input", (e) => {
     save();
   }
 });
+// 트레이: 손잡이를 잡고 내리면 접히고, 올리면 펴진다(펴진 상태에서 올리면 목록이 열린다). 팝업도 위쪽을 잡고 내리면 닫힌다.
+let drag = null, dragAt = 0;
+function setTrayMin(v) { S.trayMin = v; $("tray").classList.toggle("min", !!v); }
+document.addEventListener("pointerdown", (e) => {
+  const tray = e.target.closest(".tray"), sh = !tray && e.target.closest(".sheet .grab, .sheet .sh");
+  if (!tray && !sh) return;
+  drag = { y: e.clientY, el: tray || $("sheet").querySelector(".panel"), tray: !!tray, dy: 0, moved: false };
+});
+document.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  drag.dy = e.clientY - drag.y;
+  if (Math.abs(drag.dy) > 6) drag.moved = true;
+  if (drag.moved && drag.el) { drag.el.style.transition = "none"; drag.el.style.transform = `translateY(${Math.max(drag.tray ? -14 : 0, Math.min(drag.dy, drag.tray ? 60 : 9999))}px)`; }
+});
+function endDrag() {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.el) { d.el.style.transition = ""; d.el.style.transform = ""; }
+  if (!d.moved) return;
+  dragAt = Date.now();
+  if (d.tray) {
+    if (d.dy > 24) setTrayMin(true);
+    else if (d.dy < -24) { if (S.trayMin) setTrayMin(false); else { S.sheet = S.tray === "stock" ? "stock" : true; renderSheet(); } }
+  } else if (d.dy > 56) { S.sheet = false; renderSheet(); }
+}
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
 function onTap(e) {
   const ph = e.target.closest("[data-photo]");
   if (ph) { // 큰 사진
@@ -1139,6 +1170,8 @@ function onTap(e) {
   }
   const b = e.target.closest("button");
   // 트레이는 버튼 말고 어디를 눌러도 목록이 열린다
+  if (Date.now() - dragAt < 350) return; // 끌어서 접거나 편 직후의 탭은 무시
+  if (S.trayMin && e.target.closest(".tray") && !b?.dataset.tray && !b?.dataset.portion) { setTrayMin(false); return; }
   if (!b) { if (e.target.closest(".tray")) { S.sheet = S.tray === "stock" ? "stock" : true; renderSheet(); } return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { S.sheet = false; renderSheet(); return; }

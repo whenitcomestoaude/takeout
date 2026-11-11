@@ -1210,7 +1210,7 @@ function dailyHtml(ym, days) {
   const dots = Array.from({ length: n }, (_, i) => { const d = ym + String(i + 1).padStart(2, "0"), x = days[d];
     return `<span class="${d === S.repDay ? "cur" : ""}">${x ? "<i></i>".repeat(Math.min(x.meals, 8)) : ""}</span>`; }).join("");
   return `<p class="gh">날짜별</p><section class="daily"><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="mdots" aria-hidden="true">${dots}</div><div class="ticks">${ticks}</div>
-    <ul class="lg dlg"><li><i class="sv"></i>아낀 금액</li><li><i class="pd"></i>지출</li><li><i class="ml2"></i>끼 수(점 하나 = 한 끼)</li></ul>
+    <ul class="lg dlg"><li><i class="sv"></i>아낀 금액</li><li><i class="pd"></i>지출</li><li><i class="ml2"></i>취식</li></ul>
     <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼</p></section>`;
 }
 const wonN = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;

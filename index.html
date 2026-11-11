@@ -522,20 +522,6 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .fbar p { margin: 0; text-align: center; font-size: 11px; color: var(--muted); }
 .sheet .memo { width: 100%; margin-top: 0; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 14px var(--sans); }
 .sheet .memo::placeholder { color: var(--muted); }
-.cmts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
-.cmts:empty { display: none; }
-.cmts li { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 18px; padding: 0 4px; }
-.cmts li b { flex: none; font-weight: 600; font-size: 12px; }
-.cmts li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.cmts li time { flex: none; font-size: 11px; color: var(--muted); }
-.cmts li .lnk { flex: none; padding: 0 2px; font-size: 14px; line-height: 18px; color: var(--muted); }
-.cmtrow { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-.cmtrow input { flex: 1; min-width: 0; padding: 8px 12px; border: 0; border-radius: 999px; background: var(--well); color: var(--ink); font: 400 13px var(--sans); }
-.cmtrow input::placeholder { color: var(--muted); }
-.cmtrow input:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--gold-deep); }
-.whoc { flex: none; padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-.whoc.none { color: var(--muted); font-weight: 400; }
-.cmtsend { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--ink); color: var(--page); }
 .sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
 .sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
 .sheet h3 .ate { margin-left: auto; margin-right: 12px; padding: 4px 10px; border-radius: 999px; background: var(--well); color: var(--ink); font-size: 11px; font-weight: 600; }
@@ -590,7 +576,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, share: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, cmt: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stockBy: (() => { try { return localStorage.getItem("takeout-stockby") === "date" ? "date" : "cat"; } catch (_) { return "cat"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, share: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stockBy: (() => { try { return localStorage.getItem("takeout-stockby") === "date" ? "date" : "cat"; } catch (_) { return "cat"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -789,14 +775,14 @@ const J = (v) => JSON.stringify(v ?? null);
 const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
 function snapshot() {
   const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
-  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), cmt: pruned(S.cmt), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
+  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
 }
 // 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
 const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
 const norm = (v) => { v = clone(v) || {}; v.picks = mig(v.picks); v.portions = mig(v.portions || v.extra); delete v.extra; return v; };
 function merge3(b, mine, theirs) {
   const out = { ...theirs, view: mine.view, rest: mine.rest }; // 보기·식당 탭은 기기마다 제 것을 쓴다
-  for (const f of ["picks", "portions", "share", "rank", "mode", "ate", "memo", "cmt", "rate"]) {
+  for (const f of ["picks", "portions", "share", "rank", "mode", "ate", "memo", "rate"]) {
     const B = b[f] || {}, M = mine[f] || {}, T = theirs[f] || {}, o = {};
     for (const k of new Set([...Object.keys(M), ...Object.keys(T)])) { const v = J(M[k]) !== J(B[k]) ? M[k] : T[k]; if (v !== undefined) o[k] = v; }
     out[f] = o;
@@ -816,7 +802,7 @@ function applyState(v) {
   S.fav = new Set(v.fav || []); S.picks = v.picks || {}; S.portions = v.portions || {}; S.share = v.share || {};
   if (v.rest) S.rest = v.rest;
   S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock : []; S.eaten = Array.isArray(v.eaten) ? v.eaten : [];
-  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.cmt = v.cmt || {}; S.rate = v.rate || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.rate = v.rate || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
   archiveDone();
 }
 const remoteState = async () => { const snap = await docRef.get(); return snap.exists ? norm(snap.data()) : null; };
@@ -837,9 +823,9 @@ function save() {
 // 화면으로 돌아올 때: 상대가 고친 것을 받아 온다
 // 다른 기기 변경을 받아 다시 그릴 때, 치던 댓글은 그대로 둔다
 function keepTyping(fn) {
-  const ae = document.activeElement, keep = ae?.id === "cmtin" ? { v: ae.value, s: ae.selectionStart } : null;
+  const ae = document.activeElement, keep = ae?.id === "memo" ? { v: ae.value, s: ae.selectionStart } : null;
   fn();
-  const ni = keep && $("cmtin"); if (ni) { ni.value = keep.v; ni.focus(); try { ni.setSelectionRange(keep.s, keep.s); } catch (_) {} }
+  const ni = keep && $("memo"); if (ni) { ni.value = keep.v; ni.focus(); try { ni.setSelectionRange(keep.s, keep.s); } catch (_) {} }
 }
 async function pull() {
   if (!docRef || saveTimer || S.pulling) return;
@@ -933,12 +919,12 @@ function render() {
   const liked = items.filter((it) => S.fav.has(it.name) || f[it.name])
     .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
   S.combos = S.edit ? [] : combos(all.filter((it) => !isHidden(it)), f, n);
-  if (liked.length || S.combos.length) cats.set("추천", liked);
   const hand = items.filter((it) => it.hand);
   if (hand.length) cats.set("수제", hand);
   const byCat = new Map();
   for (const it of items) { if (!byCat.has(it.cat)) byCat.set(it.cat, []); byCat.get(it.cat).push(it); }
   [...byCat.keys()].sort((a, b) => rank(a) - rank(b)).forEach((c) => cats.set(c, byCat.get(c).sort((x, y) => (x.coin ?? 9) - (y.coin ?? 9))));
+  if (liked.length || S.combos.length) cats.set("추천", liked); // 추천은 맨 뒤
   if (!cats.has(S.cat)) S.cat = cats.keys().next().value;
 
   $("rail").innerHTML = [...cats].map(([c, list]) => {
@@ -1214,7 +1200,10 @@ function renderStock(el) {
 }
 // Ratings: 최근 먹은 것(식사 기록)과 별점을 매긴 메뉴 전부. 별점은 추천 조합에 쓰인다.
 function renderRatings(el) {
-  const eaten = S.eaten.slice().reverse().slice(0, 8).map((e, i) => `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span>${starsHtml(stockName(e))}</span><button class="lnk" data-uneat="${S.eaten.length - 1 - i}">취소</button></li>`).join("");
+  // 위: 먹었지만 아직 별점이 없는 것(최근 순). 화면에 있는 동안은 별점을 매겨도 자리에 둔다
+  if (!S.rateWait) S.rateWait = S.eaten.map((e, i) => i).filter((i) => !S.rate[stockName(S.eaten[i])]).reverse();
+  const eaten = S.rateWait.filter((i) => S.eaten[i]).map((i) => { const e = S.eaten[i];
+    return `<li><span class="gsp"></span><span class="sbody"><span class="sname"><span>${esc(stockName(e))}</span></span><span class="ssub">${dayLabel(e.d)} · ${esc(e.r)}</span>${starsHtml(stockName(e))}</span><button class="lnk" data-uneat="${i}">취소</button></li>`; }).join("");
   // 높은 점수부터. 화면에 머무는 동안에는 순서를 그대로 둬서 고치는 중에 줄이 튀지 않게 한다
   const names = Object.keys(S.rate);
   if (!S.rateOrder) S.rateOrder = names.sort((a, b) => S.rate[b] - S.rate[a] || a.localeCompare(b, "ko"));
@@ -1227,7 +1216,7 @@ function renderRatings(el) {
     <div class="sum">${avg ? `평균 <b>★ ${avg}</b>` : ""}</div></div>
     ${names.length ? `<div class="rs"><button data-rfil="" aria-pressed="${!S.rateFilter}">전체<span class="n">${names.length}</span></button>${[5, 4, 3, 2, 1].filter(cnt).map((v) => `<button data-rfil="${v}" aria-pressed="${S.rateFilter === v}">★ ${v}<span class="n">${cnt(v)}</span></button>`).join("")}</div>` : ""}`;
   el.innerHTML = `<div class="panel stockp">
-    ${eaten && !S.rateFilter ? `<p class="gh">식사 기록 · 별점을 남기면 추천 조합에 반영돼요.</p><ul class="rows faded">${eaten}</ul>` : ""}
+    ${eaten && !S.rateFilter ? `<p class="gh">별점을 기다리는 메뉴 · 별점은 추천 조합에 반영돼요.</p><ul class="rows faded">${eaten}</ul>` : ""}
     ${shown.length ? `<p class="gh">별점을 남긴 메뉴</p><ul class="rows rated">${shown.map((nm) => `<li><span class="sbody"><span class="sname"><span>${esc(nm)}</span></span>${starsHtml(nm)}</span></li>`).join("")}</ul>` : ""}
     ${!eaten && !names.length ? `<p class="none">식사 기록이 없습니다.</p>` : ""}</div>`;
   el.hidden = false;
@@ -1344,7 +1333,7 @@ function renderSheet() {
     body += `<h3><span>${MEALS[m]}${extra}<em>${esc(x.name)}</em>${rk}</span>${ate}</h3><ul class="rows${fin ? " fin" : ""}">` +
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
-        const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
+        const coin = !it ? "" : kindChip(it) || `<span class="coin">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
         const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm) + (it?.shelf ? `<i class="tg">${esc(it.shelf)}</i>` : "") + (it?.withSide ? `<i class="tg">+ ${esc(it.withSide)}</i>` : "") + (it?.cat === "냉동" ? '<i class="tg fz">Frozen</i>' : "") + (it?.drink ? '<i class="tg">음료</i>' : "");
         const side = isSide(it), g = got[name], ke = esc(k);
         const lead = side ? `<span class="gsp"></span>`
@@ -1357,7 +1346,7 @@ function renderSheet() {
       }).join("") + "</ul>";
   });
   const pend = pendingKeys(S.date).length;
-  if (body) body = `<p class="gh">전달사항</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">${cmtHtml(S.date)}` + body
+  if (body) body = `<p class="gh">전달사항</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">` + body
     + `<div class="fbar"><span class="shwrap"><button class="copy shico" id="share" aria-haspopup="true" aria-label="공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><span class="shmenu" id="shmenu" hidden><button id="copy">텍스트로 복사</button><button id="shareimg">이미지로 공유</button></span></span><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>테이크아웃 완료한 메뉴는 STOCK에서 관리할 수 있습니다.</p></div>`;
   const open = el.querySelector("#shmenu") && !el.querySelector("#shmenu").hidden;
   el.innerHTML = `<div class="panel">${body || `<p class="none">이 날짜에 담은 메뉴가 없습니다.</p>`}</div>`;
@@ -1398,21 +1387,6 @@ function message(d) {
   return out.join("\n\n");
 }
 const MEMO_TO = "Dear 충토."; // 메모 앞에 붙는 받는 사람
-// 전달사항 댓글: 날짜마다. 쓴 사람은 기기마다 한 번 골라 두고, 지운 것은 쓴 사람만
-const WHO = ["아가", "충토"];
-let who = ""; try { who = localStorage.getItem("takeout-who") || ""; if (who === "aude") who = "아가"; if (!WHO.includes(who)) who = ""; } catch (_) {}
-function cmtHtml(d) {
-  const list = Object.entries(S.cmt).filter(([, c]) => c.d === d).sort((a, b) => a[1].t - b[1].t);
-  const hm = (t) => new Date(t + 9 * 3600e3).toISOString().slice(11, 16);
-  return `<ul class="cmts">${list.map(([id, c]) => `<li><b>${esc(c.w)}</b><span>${esc(c.x)}</span><time>${hm(c.t)}</time>${c.w === who ? `<button class="lnk" data-uncmt="${esc(id)}" aria-label="댓글 지우기">×</button>` : ""}</li>`).join("")}</ul>
-    <div class="cmtrow"><button class="whoc${who ? "" : " none"}" id="whoc" aria-label="쓰는 사람 바꾸기">${esc(who || "누구?")}</button><input id="cmtin" maxlength="80" enterkeyhint="send" autocomplete="off" placeholder="댓글"><button class="cmtsend" id="cmtsend">등록</button></div>`;
-}
-function addCmt() {
-  const el = $("cmtin"), x = (el?.value || "").trim(); if (!x) return;
-  if (!who) { toast("이름을 먼저 골라 주세요"); return; }
-  S.cmt[`${S.date}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`] = { d: S.date, w: who, t: Date.now(), x };
-  save(); render(); $("cmtin")?.focus();
-}
 // ---------- image card ----------
 // 카톡에 그대로 올릴 수 있는 한 장: 날짜 제목 → 끼니·식당별로 진열대 순서의 메뉴
 function cardBlocks(d) {
@@ -1564,7 +1538,6 @@ function handle(e) {
 }
 // click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
 document.addEventListener("click", (e) => handle(e), true);
-document.addEventListener("keydown", (e) => { if (e.target.id === "cmtin" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); addCmt(); } });
 // 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
 document.addEventListener("input", (e) => {
   if (e.target.id === "q") { S.q = e.target.value; const lb = $("lbody"); if (lb) lb.innerHTML = S.find(S.q); return; }
@@ -1610,7 +1583,7 @@ async function savePrice(name) {
   } catch (e) { toast("저장하지 못했어요."); }
 }
 // 탭 이동: 기기마다 마지막으로 보던 탭을 기억한다(남편은 Cart, 집에서는 Stock)
-function goTab(t) { S.tab = t; S.rateOrder = null; try { localStorage.setItem("takeout-tab", t); } catch (_) {} render(); scrollTo(0, 0); }
+function goTab(t) { S.tab = t; S.rateOrder = null; S.rateWait = null; try { localStorage.setItem("takeout-tab", t); } catch (_) {} render(); scrollTo(0, 0); }
 function onTap(e) {
   const ph = e.target.closest("[data-photo]");
   if (ph) { // 큰 사진
@@ -1664,7 +1637,8 @@ function onTap(e) {
   }
   if (b.dataset.uneat != null) { // 되돌리기
     const e = S.eaten[+b.dataset.uneat]; if (!e) return;
-    S.eaten.splice(+b.dataset.uneat, 1);
+    const ui = +b.dataset.uneat; S.eaten.splice(ui, 1);
+    if (S.rateWait) S.rateWait = S.rateWait.filter((i) => i !== ui).map((i) => (i > ui ? i - 1 : i));
     const cur = S.stock.find((x) => x.src === e.src); if (cur) cur.q = (cur.q || 1) + 1; else S.stock.push({ ...e, q: 1 });
     save(); render(); return;
   }
@@ -1687,9 +1661,6 @@ function onTap(e) {
   if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.cat) { S.q = null; S.cat = b.dataset.cat; S.catTouched = true; render(); scrollTo(0, 0); document.querySelector(`.rail [data-cat="${CSS.escape(S.cat)}"]`)?.scrollIntoView({ inline: "center", block: "nearest" }); return; }
   if (b.dataset.portion) { S.portions[k] = +b.dataset.portion; save(); render(); return; }
-  if (b.id === "whoc") { who = WHO[(WHO.indexOf(who) + 1) % WHO.length]; try { localStorage.setItem("takeout-who", who); } catch (_) {} render(); return; }
-  if (b.id === "cmtsend") { addCmt(); return; }
-  if (b.dataset.uncmt) { delete S.cmt[b.dataset.uncmt]; save(); render(); return; }
   if (b.id === "half") { if (S.share[k]) delete S.share[k]; else S.share[k] = true; save(); render(); return; }
   if (b.id === "edit") { S.edit = !S.edit; render(); return; }
   if (b.id === "ratefold") { S.rateOpen = !S.rateOpen; S.rateOrder = null; renderSheet(); return; }

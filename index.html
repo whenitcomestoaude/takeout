@@ -227,6 +227,7 @@ main .gutter { padding-block: 20px calc(215px + env(safe-area-inset-bottom, 0px)
 
 /* rows — iOS 묶음 목록: 머리글은 카드 밖, 줄은 제목+보조 줄, 구분선은 글자 시작점부터 */
 .gh { margin: 24px 16px 8px; font-size: 12px; color: var(--muted); }
+.gh.hurry { color: var(--warn); font-weight: 600; }
 .gh:first-of-type { margin-top: 0; }
 .rows { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 14px; overflow: hidden; }
 .rows li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 40px; align-items: center; min-height: 60px; padding-left: 16px; }
@@ -1185,6 +1186,10 @@ function renderStock(el) {
   const dayAge = (d) => Math.round((today - ymd(d)) / 864e5);
   const gname = (c) => (byDate ? `${dayLabel(c)} · ${dayAge(c) > 0 ? `${dayAge(c)}일째` : "오늘"}` : c);
   for (const e of all) { const c = byDate ? e.d : stockCat(e); (groups.get(c) || groups.set(c, []).get(c)).push(e); }
+  // 빨리 먹어야 할 것(하루 지난 신선식품): 묶음 안에서 맨 위로, 분류별 전체 보기에서는 맨 위 묶음으로 따로
+  const urgent = (e) => isFresh(e) && dayAge(e.d) >= 1;
+  for (const l of groups.values()) l.sort((a, b) => urgent(b) - urgent(a));
+  const hurry = byDate || S.stockCat ? [] : all.filter(urgent);
   const cats = [...groups.keys()].sort((a, b) => (byDate ? a.localeCompare(b) : rank(a) - rank(b)));
   if (S.stockCat && !groups.has(S.stockCat)) S.stockCat = null;
   const row = (e) => {
@@ -1194,7 +1199,9 @@ function renderStock(el) {
       <span class="sbody"><span class="sname"><span>${esc(stockName(e))}${e.fz ? '<i class="tg fz">Frozen</i>' : ""}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
   };
   // 전체 보기에서는 분류마다 묶고, 분류를 고르면 그것만
-  const rows = (S.stockCat ? [S.stockCat] : cats).map((c) => `${S.stockCat ? "" : `<p class="gh">${esc(gname(c))}</p>`}<ul class="rows">${groups.get(c).map(row).join("")}</ul>`).join("");
+  const rest = (c) => groups.get(c).filter((e) => !hurry.includes(e));
+  const rows = (hurry.length ? `<p class="gh hurry">빨리 먹을 것</p><ul class="rows">${hurry.map(row).join("")}</ul>` : "") +
+    (S.stockCat ? [S.stockCat] : cats).filter((c) => rest(c).length).map((c) => `${S.stockCat ? "" : `<p class="gh">${esc(gname(c))}</p>`}<ul class="rows">${rest(c).map(row).join("")}</ul>`).join("");
   // 머리: 큰 숫자(남은 개수) + 가장 오래된 것, 아래에 분류 줄
   const oldest = all.length ? Math.round((today - ymd(all[0].d)) / 864e5) : 0;
   $("althead").innerHTML = `<div class="when"><div class="week"><span class="day" aria-pressed="true"><span class="dn">${qty(all)}</span><span class="wl">Items</span></span></div>

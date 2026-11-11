@@ -561,7 +561,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stockBy: (() => { try { return localStorage.getItem("takeout-stockby") === "date" ? "date" : "cat"; } catch (_) { return "cat"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1114,22 +1114,26 @@ function renderStock(el) {
   const all = [...S.stock].sort((a, b) => a.d.localeCompare(b.d) || (a.t || 0) - (b.t || 0));
   const qty = (l) => l.reduce((a, e) => a + (e.q || 1), 0);
   const groups = new Map();
-  for (const e of all) { const c = stockCat(e); (groups.get(c) || groups.set(c, []).get(c)).push(e); }
-  const cats = [...groups.keys()].sort((a, b) => rank(a) - rank(b));
+  // 묶는 기준: 분류별 또는 가져온 날짜별(오래된 날부터 — 먼저 먹어야 할 것이 위로)
+  const byDate = S.stockBy === "date";
+  const dayAge = (d) => Math.round((today - ymd(d)) / 864e5);
+  const gname = (c) => (byDate ? `${dayLabel(c)} · ${dayAge(c) > 0 ? `${dayAge(c)}일째` : "오늘"}` : c);
+  for (const e of all) { const c = byDate ? e.d : stockCat(e); (groups.get(c) || groups.set(c, []).get(c)).push(e); }
+  const cats = [...groups.keys()].sort((a, b) => (byDate ? a.localeCompare(b) : rank(a) - rank(b)));
   if (S.stockCat && !groups.has(S.stockCat)) S.stockCat = null;
   const row = (e) => {
     const days = Math.round((today - ymd(e.d)) / 864e5);
-    const sub = [dayLabel(e.d), MEALS[e.m], e.r, days > 0 ? `${days}일째` : "오늘", e.from && e.n ? `${e.from} 대신` : ""].filter(Boolean).join(" · ");
+    const sub = (byDate ? [stockCat(e), MEALS[e.m], e.r] : [dayLabel(e.d), MEALS[e.m], e.r, days > 0 ? `${days}일째` : "오늘"]).concat(e.from && e.n ? `${e.from} 대신` : "").filter(Boolean).join(" · ");
     return `<li><button class="gchk" data-eatsel="${esc(e.src)}" aria-pressed="${S.eatSel.has(e.src)}" aria-label="먹었어요"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></button>
       <span class="sbody"><span class="sname"><span>${esc(stockName(e))}${e.fz ? '<i class="tg fz">Frozen</i>' : ""}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
   };
   // 전체 보기에서는 분류마다 묶고, 분류를 고르면 그것만
-  const rows = (S.stockCat ? [S.stockCat] : cats).map((c) => `${S.stockCat ? "" : `<p class="gh">${esc(c)}</p>`}<ul class="rows">${groups.get(c).map(row).join("")}</ul>`).join("");
+  const rows = (S.stockCat ? [S.stockCat] : cats).map((c) => `${S.stockCat ? "" : `<p class="gh">${esc(gname(c))}</p>`}<ul class="rows">${groups.get(c).map(row).join("")}</ul>`).join("");
   // 머리: 큰 숫자(남은 개수) + 가장 오래된 것, 아래에 분류 줄
   const oldest = all.length ? Math.round((today - ymd(all[0].d)) / 864e5) : 0;
   $("althead").innerHTML = `<div class="when"><div class="week"><span class="day" aria-pressed="true"><span class="dn">${qty(all)}</span><span class="wl">Items</span></span></div>
-    <div class="sum">${all.length ? `가장 오래된 것 <b>${oldest > 0 ? `${oldest}일째` : "오늘"}</b>` : ""}</div></div>
-    ${cats.length > 1 ? `<div class="rs"><button data-scat="" aria-pressed="${!S.stockCat}">전체<span class="n">${qty(all)}</span></button>${cats.map((c) => `<button data-scat="${esc(c)}" aria-pressed="${S.stockCat === c}">${esc(c)}<span class="n">${qty(groups.get(c))}</span></button>`).join("")}</div>` : ""}`;
+    ${all.length ? `<div class="sg" role="group" aria-label="묶는 기준"><button data-sby="cat" aria-pressed="${!byDate}">분류</button><button data-sby="date" aria-pressed="${byDate}">날짜</button></div>` : ""}</div>
+    ${cats.length > 1 ? `<div class="rs"><button data-scat="" aria-pressed="${!S.stockCat}">전체<span class="n">${qty(all)}</span></button>${cats.map((c) => `<button data-scat="${esc(c)}" aria-pressed="${S.stockCat === c}">${esc(byDate ? dayLabel(c) : c)}<span class="n">${qty(groups.get(c))}</span></button>`).join("")}</div>` : ""}`;
   for (const src of [...S.eatSel]) if (!all.some((e) => e.src === src)) S.eatSel.delete(src);
   el.innerHTML = `<div class="panel stockp">${rows || `<p class="none">테이크아웃 재고가 없습니다.</p>`}
     ${rows ? `<div class="fbar one"><button class="copy" id="eatdone"${S.eatSel.size ? "" : " disabled"}>취식 완료</button><p>취식 완료한 메뉴는 RATINGS에서 별점을 남길 수 있습니다.</p></div>` : ""}</div>`;
@@ -1505,6 +1509,7 @@ function onTap(e) {
   if ($("shmenu") && !$("shmenu").hidden && !e.target.closest(".shwrap")) { $("shmenu").hidden = true; return; }
   if (!b) { if (e.target.closest(".tray")) goTab("cart"); return; }
   if (b.dataset.nav) { goTab(b.dataset.nav); return; }
+  if (b.dataset.sby) { S.stockBy = b.dataset.sby; S.stockCat = null; try { localStorage.setItem("takeout-stockby", S.stockBy); } catch (_) {} renderSheet(); return; }
   if (b.dataset.scat != null) { S.stockCat = b.dataset.scat || null; renderSheet(); return; }
   if (b.id === "psave") { savePrice(b.dataset.name); return; }
   if (b.dataset.rday) { S.repDay = b.dataset.rday; renderSheet(); return; }

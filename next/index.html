@@ -622,6 +622,8 @@ function probePhotos(p) {
 const photoBtn = (it) => (S.canPhoto && it.photo ? `<span class="ph" role="button" data-photo="${esc(it.name)}" aria-label="${esc(it.name)} 사진"><img loading="lazy" alt="" src="${esc(thumbOf(it.photo))}"></span>` : "");
 const tagText = (it) => [it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
 // 현장 구분(패밀리홀): 코인 점 대신 DELI / SIDE / 1PICK / 2PICK 칩으로. 구분이 없는 식당(R5)은 코인 점.
+// R5 진열대 이름(컵푸드·사이드…) — 탭 이름과 같으면 되풀이하지 않는다
+const shelfOf = (it) => (it?.shelf && it.shelf !== it.cat && it.shelf !== S.cat ? it.shelf : "");
 const kindChip = (it) => { const t = (it.tag || "").toUpperCase(); if (!t) return ""; const c = /PICK/.test(t) ? "pk" : t === "DELI" ? "dl" : "sd"; return `<i class="kd ${c}">${esc(t)}</i>`; };
 const lead2 = (it, dots) => kindChip(it) || (dots ? `<span class="coin">${dots}</span>` : "");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
@@ -662,7 +664,7 @@ function itemsFor(d, m, rid = S.rest) {
       // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
       const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
       if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
-      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, ...priceOf(r, sideName && HALF.test(r.n) ? sidePr.get(r.ct) : null), psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, ...priceOf(r, sideName && HALF.test(r.n) ? sidePr.get(r.ct) : null), psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, shelf: rid === "REST000007" && r.sh && r.sh !== "음료" && r.sh !== "냉동" ? r.sh : null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
     }
   }
   const list = [...seen.values()];
@@ -961,7 +963,7 @@ function gridBody(list, sel, f, isHidden) {
 function rowHtml(it, q, plain) {
   const nm = esc(it.name);
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", plain ? "" : it.cat, noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", shelfOf(it) || (plain ? "" : it.cat), noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
@@ -1048,7 +1050,7 @@ function tile(it, q, times, hidden) {
   }
   // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", S.cat === "수제" || S.q != null ? it.cat : "", tagText(it), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", shelfOf(it) || (S.cat === "수제" || S.q != null ? it.cat : ""), tagText(it), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
@@ -1284,7 +1286,7 @@ function renderSheet() {
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
-        const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm) + (it?.withSide ? `<i class="tg">+ ${esc(it.withSide)}</i>` : "") + (it?.cat === "냉동" ? '<i class="tg fz">Frozen</i>' : "") + (it?.drink ? '<i class="tg">음료</i>' : "");
+        const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm) + (it?.shelf ? `<i class="tg">${esc(it.shelf)}</i>` : "") + (it?.withSide ? `<i class="tg">+ ${esc(it.withSide)}</i>` : "") + (it?.cat === "냉동" ? '<i class="tg fz">Frozen</i>' : "") + (it?.drink ? '<i class="tg">음료</i>' : "");
         const side = isSide(it), g = got[name], ke = esc(k);
         const lead = side ? `<span class="gsp"></span>`
           : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
@@ -1322,8 +1324,9 @@ function message(d) {
       const it = by[name]; if (!it) continue;
       const label = `${name}${it.withSide ? ` (+${it.withSide})` : ""}${q > 1 ? ` ×${q}` : ""}`;
       if (it.drink) { drink.push(label); continue; }
-      if (!sections.has(it.cat)) sections.set(it.cat, []);
-      sections.get(it.cat).push(label);
+      const sec = it.shelf || it.cat;
+      if (!sections.has(sec)) sections.set(sec, []);
+      sections.get(sec).push(label);
     }
     const b = budget(items, sel, n);
     if (b.fixed) drink.push(b.fixed > 1 ? `지정 음료 ×${b.fixed}` : "지정 음료");
@@ -1347,7 +1350,7 @@ function cardBlocks(d) {
     for (const { name, q, it } of ordered(sel, by)) {
       if (!it) continue;
       // 현장 구분(Deli · Side · Pick)만 남긴다 — 메뉴 분류는 내가 짐작한 것이라 뺀다
-      const tag = /pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "";
+      const tag = /pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : it.shelf || "";
       rows.push({ text: it.withSide ? `${name} + ${it.withSide}` : name, q, side: isSide(it), coin: it.drink ? 0 : it.coin || 0, drink: !!it.drink, pick: tag === "Pick", tag, frozen: it.cat === "냉동" });
     }
     // Deli·Side·Pick 이 있는 식당은 같은 구분끼리 모은다 (음료는 맨 뒤)

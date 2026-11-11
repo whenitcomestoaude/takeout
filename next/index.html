@@ -907,7 +907,7 @@ function render() {
   $("rail").innerHTML = [...cats].map(([c, list]) => {
     const has = list.some((it) => sel[it.name]);
     const off = S.edit && S.hideCats.has(c);
-    return `<button data-cat="${esc(c)}" aria-pressed="${c === S.cat}" class="${has ? "has" : ""}${off ? " off" : ""}">${c === "추천" ? `${heart(true)}추천` : esc(c)}<span class="n">${list.length}</span></button>`;
+    return `<button data-cat="${esc(c)}" aria-pressed="${c === S.cat}" class="${has ? "has" : ""}${off ? " off" : ""}">${c === "추천" ? `${heart(true)}추천` : `${esc(c)}<span class="n">${list.length}</span>`}</button>`;
   }).join("") + `<button class="editbtn" id="edit" aria-pressed="${S.edit}">${S.edit ? "완료" : "숨기기"}</button>`;
 
   const list = cats.get(S.cat) || [];

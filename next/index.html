@@ -22,6 +22,7 @@
     mcp: { callTool: async () => ({ payload: [{ j: await j(await fetch(url("menu"), { cache: "no-store" })) }] }),
       sync: async () => j(await fetch(url("sync"), { cache: "no-store" })),
       setPrice: async (name, price) => j(await fetch(`${API.replace("takeout-api", "takeout-price")}?k=${encodeURIComponent(k)}&api=set`, { method: "POST", body: JSON.stringify({ name, price }) })),
+      getPrice: async (name) => j(await fetch(`${url("price")}&name=${encodeURIComponent(name)}`, { cache: "no-store" })),
       ping: async (id) => j(await fetch(`${url("ping")}&id=${encodeURIComponent(id)}`, { cache: "no-store" })) }, // 새로고침 버튼: 식당 메뉴를 지금 다시 받아 온다
     user: { id: async () => "shared" },
     db: { doc: () => ({
@@ -876,6 +877,7 @@ async function initStore() {
     if (v) {
       base = v; applyState(clone(v));
       if (!S.catTouched) S.cat = null; // 저장된 취향이 도착하면 ★ 추천 탭부터 보이게
+      if (!S.dateTouched) S.date = null; // 기록이 도착한 뒤 기본 날짜를 다시 고른다(저녁까지 끝났으면 다음 날)
       if (S.rows.length) render();
     }
   } catch (e) { console.warn("store", e); }
@@ -893,7 +895,11 @@ function render() {
   $("rests").innerHTML = S.rests.map((x) => `<button data-rest="${x.id}" aria-pressed="${x.id === S.rest}">${esc(x.name)}</button>`).join("");
   const dates = [...new Set(S.rows.filter((r) => r.r === S.rest).map((r) => r.d))];
   if (!dates.length) return;
-  if (!dates.includes(S.date)) S.date = dates.includes(todayYmd()) ? todayYmd() : dates[0];
+  if (!dates.includes(S.date)) {
+    const t = todayYmd(), after = dates.find((d) => d > t);
+    S.date = dates.includes(t) && !(dinnerDone(t) && after) ? t : after && dates.includes(t) ? after : dates.includes(t) ? t : dates[0];
+    if (S.date !== t) S.meal = null;
+  }
   const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.r === S.rest && r.d === S.date && r.m === m));
   if (!meals.includes(S.meal)) S.meal = defaultMeal(meals);
   const k = keyOf(S.date, S.meal);
@@ -977,15 +983,18 @@ function render() {
   renderTray(all, sel, n, k);
   setStamp();
 }
-// 각 탭: 담은 적 있거나 ☆한 메뉴를 위로, 나머지는 '새로운 메뉴'로 나눠 보여준다
+// 각 탭: 하트한 메뉴 → 담은 적 있는 메뉴 → 새로운 메뉴. 한 묶음뿐이면 제목 없이
+function groupsOf(list, f) {
+  const liked = list.filter((it) => S.fav.has(it.name)).sort((a, b) => (f[b.name] || 0) - (f[a.name] || 0));
+  const known = list.filter((it) => !S.fav.has(it.name) && f[it.name]).sort((a, b) => f[b.name] - f[a.name]);
+  const fresh = list.filter((it) => !S.fav.has(it.name) && !f[it.name]);
+  const g = [["좋아하는 메뉴", liked], ["담은 적 있는 메뉴", known], ["새로운 메뉴", fresh]].filter(([, l]) => l.length);
+  return g.length > 1 ? g : g.map(([, l]) => ["", l]);
+}
 function gridBody(list, sel, f, isHidden) {
   const draw = (l) => l.map((it) => tile(it, sel[it.name] || 0, f[it.name] || 0, isHidden(it))).join("");
   if (S.edit) return draw(list);
-  const known = list.filter((it) => S.fav.has(it.name) || f[it.name])
-    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
-  const fresh = list.filter((it) => !known.includes(it));
-  if (!known.length || !fresh.length) return draw(known.length ? known : fresh);
-  return `<p class="gh">담은 적 있는 메뉴</p>${draw(known)}<p class="gh">새로운 메뉴</p>${draw(fresh)}`;
+  return groupsOf(list, f).map(([t, l]) => `${t ? `<p class="gh">${t}</p>` : ""}${draw(l)}`).join("");
 }
 // 목록 한 줄: 체크 원 · 이름 + 보조 줄(코인 · 분류 · kcal) · 수량 · 하트
 function rowHtml(it, q, plain) {
@@ -1005,11 +1014,7 @@ function rowHtml(it, q, plain) {
 function listBody(list, sel, f) {
   const plain = S.cat !== "수제" && S.q == null;
   const group = (title, l) => l.length ? `${title ? `<p class="gh">${title}</p>` : ""}<ul class="rows">${l.map((it) => rowHtml(it, sel[it.name] || 0, plain)).join("")}</ul>` : "";
-  const known = list.filter((it) => S.fav.has(it.name) || f[it.name])
-    .sort((a, b) => (S.fav.has(b.name) - S.fav.has(a.name)) || ((f[b.name] || 0) - (f[a.name] || 0)));
-  const fresh = list.filter((it) => !known.includes(it));
-  return !known.length || !fresh.length ? group("", known.length ? known : fresh)
-    : group("담은 적 있는 메뉴", known) + group("새로운 메뉴", fresh);
+  return groupsOf(list, f).map(([t, l]) => group(t, l)).join("");
 }
 const rank = (c) => { const i = CAT_ORDER.indexOf(c); return i < 0 ? 50 : i; };
 
@@ -1064,8 +1069,12 @@ function combosHtml(list, n, sel = {}) {
       </span>
     </button>`).join("")}</div>`;
 }
+// 그날 저녁을 테이크아웃 완료했고, 저녁에 아직 담아만 둔 것이 없으면 그날은 끝난 것으로 본다
+const dinnerDone = (d) => { const ks = Object.keys(S.picks).filter((k) => k.split("|")[1].startsWith(`${d}-3`));
+  return ks.some((k) => S.picks[k]?.done) && !ks.some((k) => !S.picks[k]?.done && Object.keys(S.picks[k]?.items || {}).length); };
 function defaultMeal(meals) {
   const h = new Date(Date.now() + 9 * 3600e3).getUTCHours();
+  if (S.date && S.date !== todayYmd()) return meals[0]; // 다른 날은 아침부터
   return meals.includes("3") && h >= 9 && h < 20 ? "3" : meals[0];
 }
 function tile(it, q, times, hidden) {
@@ -1158,7 +1167,10 @@ function stockMaps() { if (catRows === S.rows) return; catRows = S.rows; catByNa
 function stockCat(e) {
   if (e.c) return e.c;
   stockMaps();
-  return catByName.get(e.n) || (e.fz ? "냉동" : "기타");
+  if (catByName.has(e.n)) return catByName.get(e.n);
+  if (e.fz) return "냉동";
+  const n = e.n || "";
+  return breadFix(tteokFix(fruitFix("기타", n), n), n);
 }
 // 신선식품(수제, 샐러드·샌드위치·과일·핫밀)은 가져온 지 하루가 지나면 빨리 먹으라고 줄 색을 바꾼다. 냉동은 제외.
 const FRESH_CATS = new Set(["샐러드", "샌드위치", "과일", "핫밀"]);
@@ -1299,7 +1311,7 @@ function renderReport(el) {
     ${m0.meals ? cmpHtml(m0) + dailyHtml(cur, days) : ""}
     ${keys.length > 1 ? `<p class="gh">월별</p><ul class="rows">${keys.map((ym) => { const x = months[ym], mx = Math.max(1, ...keys.map((y) => months[y].worth));
       return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
-    ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? wonN(g.v * g.q) : "–"}</span></li>`).join("")}</ul>` : ""}
+    ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? `<span class="pr" data-price="${esc(g.nm)}">${wonN(g.v * g.q)}</span>` : "–"}</span></li>`).join("")}</ul>` : ""}
     ${keys.length || got.length ? `<p class="none">시중가는 AI 검색 결과로 추정치입니다.</p>` : ""}</div>`;
   el.hidden = false;
 }
@@ -1558,10 +1570,16 @@ document.addEventListener("input", (e) => {
 });
 // 가격 출처: 어디서 나온 값인지 보여 주고, 아는 값이 있으면 그 자리에서 고친다
 const SRC_LABEL = { web: "웹 검색으로 확인한 가격", est: "AI가 비슷한 상품으로 추정한 가격", manual: "직접 입력한 가격", naver: "웹 검색으로 확인한 가격" };
-function findItem(name) { for (const x of S.rests) for (const m of Object.keys(MEALS)) { const it = itemsFor(S.date, m, x.id).find((y) => y.name === name); if (it) return it; } return null; }
+// 지금 메뉴(모든 날짜)에서 찾고, 없으면(지난 기록) 서버에서 그 메뉴의 시중가만 받아 온다
+function findItem(name) {
+  for (const d of new Set(S.rows.map((r) => r.d))) for (const x of S.rests) for (const m of Object.keys(MEALS)) { const it = itemsFor(d, m, x.id).find((y) => y.name === name); if (it) return it; }
+  return null;
+}
 async function openPrice(name) {
-  const it = findItem(name); if (!it) return;
   const mcp = await claude.use("mcp"), canEdit = !!mcp?.setPrice;
+  let it = findItem(name);
+  if (!it && mcp?.getPrice) { try { const r = await mcp.getPrice(name); if (r?.pr > 0) it = { name, price: r.pr, own: r.pr, est: r.ps === "est", psrc: r.ps, ptitle: r.pt, plink: r.pl }; } catch (_) {} }
+  if (!it) { toast("가격 정보를 찾지 못했어요."); return; }
   let host = ""; try { host = it.plink ? new URL(it.plink).hostname.replace(/^www\./, "") : ""; } catch (_) {}
   const el = $("sheet");
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button><div class="panel psheet" role="dialog" aria-label="시중가"><div class="grab"></div>
@@ -1578,6 +1596,9 @@ async function savePrice(name) {
   try {
     const mcp = await claude.use("mcp"); await mcp.setPrice(name, v);
     for (const r of S.rows) if (r.n.replace(SOLD, "").trim() === name) { r.pr = v; r.ps = "manual"; r.pt = null; r.pl = null; }
+    // 지난 기록(REPORT)의 값도 고친 가격으로 맞춘다
+    let past = false; for (const p of Object.values(S.picks)) if (p?.done && p.val && name in p.val) { p.val[name] = v; past = true; }
+    if (past) save();
     cache.clear(); $("sheet").hidden = true; $("sheet").innerHTML = ""; render(); toast("가격을 고쳤습니다");
   } catch (e) { toast("저장하지 못했어요."); }
 }
@@ -1596,11 +1617,11 @@ function onTap(e) {
   if ($("shmenu") && !$("shmenu").hidden && !e.target.closest(".shwrap")) { $("shmenu").hidden = true; return; }
   if (!b) { if (e.target.closest(".tray")) goTab("cart"); return; }
   if (b.dataset.nav) { goTab(b.dataset.nav); return; }
-  if (b.dataset.sby) { S.stockBy = b.dataset.sby; S.stockCat = null; try { localStorage.setItem("takeout-stockby", S.stockBy); } catch (_) {} renderSheet(); return; }
-  if (b.dataset.scat != null) { S.stockCat = b.dataset.scat || null; renderSheet(); return; }
+  if (b.dataset.sby) { S.stockBy = b.dataset.sby; S.stockCat = null; try { localStorage.setItem("takeout-stockby", S.stockBy); } catch (_) {} renderSheet(); scrollTo(0, 0); return; }
+  if (b.dataset.scat != null) { S.stockCat = b.dataset.scat || null; renderSheet(); scrollTo(0, 0); return; }
   if (b.id === "psave") { savePrice(b.dataset.name); return; }
   if (b.dataset.rday) { S.repDay = b.dataset.rday; renderSheet(); return; }
-  if (b.dataset.rmonth) { S.repMonth = b.dataset.rmonth; renderSheet(); return; }
+  if (b.dataset.rmonth) { S.repMonth = b.dataset.rmonth; renderSheet(); scrollTo(0, 0); return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
   if (b.id === "sheetclose" || b.id === "sheetclose2") { $("sheet").hidden = true; $("sheet").innerHTML = ""; return; }
   if (b.id === "stamp") { refreshMenu(); return; }
@@ -1628,7 +1649,7 @@ function onTap(e) {
       S.eaten.push({ ...e, q: 1 }); if (e.q > 1) e.q -= 1; else S.stock = S.stock.filter((x) => x !== e); }
     S.eaten = S.eaten.slice(-20); S.eatSel.clear(); save(); render(); toast("RATINGS에 추가됨"); return;
   }
-  if (b.dataset.rfil != null) { S.rateFilter = +b.dataset.rfil || null; renderSheet(); return; }
+  if (b.dataset.rfil != null) { S.rateFilter = +b.dataset.rfil || null; renderSheet(); scrollTo(0, 0); return; }
   if (b.dataset.rate != null) { // 별점: 같은 점수를 다시 누르면 지운다
     const v = +b.dataset.v, nm = b.dataset.rate;
     if (S.rate[nm] === v) delete S.rate[nm]; else S.rate[nm] = v;
@@ -1655,9 +1676,9 @@ function onTap(e) {
   if (b.dataset.del != null) { const p = S.picks[k]; unGot(k, b.dataset.del); if (p?.items) { delete p.items[b.dataset.del]; p.sent = false; } save(); render(); return; }
   if (b.dataset.slot) { const [m2, r2] = b.dataset.slot.split("|"); if (m2 === S.meal && r2 === S.rest) { goTab("cart"); return; } S.meal = m2; S.rest = r2; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
   if (b.dataset.rest) { S.rest = b.dataset.rest; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
-  if (b.dataset.date) { S.date = b.dataset.date; S.cat = null; render(); scrollTo(0, 0); return; }
+  if (b.dataset.date) { S.date = b.dataset.date; S.dateTouched = true; S.cat = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }
-  if (b.dataset.cat) { S.q = null; S.cat = b.dataset.cat; S.catTouched = true; render(); b.scrollIntoView({ inline: "center", block: "nearest" }); return; }
+  if (b.dataset.cat) { S.q = null; S.cat = b.dataset.cat; S.catTouched = true; render(); scrollTo(0, 0); document.querySelector(`.rail [data-cat="${CSS.escape(S.cat)}"]`)?.scrollIntoView({ inline: "center", block: "nearest" }); return; }
   if (b.dataset.portion) { S.portions[k] = +b.dataset.portion; save(); render(); return; }
   if (b.id === "whoc") { who = WHO[(WHO.indexOf(who) + 1) % WHO.length]; try { localStorage.setItem("takeout-who", who); } catch (_) {} render(); return; }
   if (b.id === "cmtsend") { addCmt(); return; }

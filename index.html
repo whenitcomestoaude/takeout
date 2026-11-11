@@ -1245,6 +1245,17 @@ function dailyHtml(ym, days) {
     <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼</p></section>`;
 }
 const wonN = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
+// 인분: 끼니(날짜·아침/저녁)마다 식당별로 센다. 같은 끼니·같은 식당을 나눠서 테이크아웃 완료했으면 한 번으로 보고 큰 쪽 인분을 쓴다.
+// 한 끼니에 식당이 둘이면 인분을 더하고, 끼니마다 1인분을 뺀 만큼이 추가취식(1회 3,000원)
+function addPor(por, k, p) {
+  const [r, dmx] = k.split("|"), dm = dmx.split("#")[0], o = (por[dm] ||= {});
+  o[r] = Math.max(o[r] || 0, 1 + Math.round((p.paid || 0) / EXTRA_FEE));
+}
+function porSum(por) {
+  let meals = 0, paid = 0;
+  for (const o of Object.values(por)) { const n = Object.values(o).reduce((a, v) => a + v, 0); meals += n; paid += (n - 1) * EXTRA_FEE; }
+  return { meals, paid };
+}
 function renderReport(el) {
   const months = {};
   for (const [k, p] of Object.entries(S.picks)) {
@@ -1253,18 +1264,18 @@ function renderReport(el) {
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) mth.worth += p.val[nm] * (p.items?.[nm] || 1);
     // 낸 돈은 끼니 단위로 센다: 한 끼에 가져온 인분(식당이 둘이면 둘을 더함)에서 1인분을 뺀 만큼이 추가취식
     const dm = k.split("|")[1].split("#")[0];
-    mth.por[dm] = (mth.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
+    addPor(mth.por, k, p);
   }
-  for (const mth of Object.values(months)) { mth.meals = Object.values(mth.por).reduce((x, n) => x + n, 0); /* 끼 수는 가져온 인분 수 */ mth.paid = Object.values(mth.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
+  for (const mth of Object.values(months)) { Object.assign(mth, porSum(mth.por)); /* 끼 수는 가져온 인분 수 */ }
   // 날짜별: 실질 가치(시중가)와 지출
   const days = {};
   for (const [k, p] of Object.entries(S.picks)) {
     if (!p.done || !p.val) continue;
     const dm = k.split("|")[1].split("#")[0], d = dm.slice(0, 8), x = (days[d] ||= { worth: 0, por: {} });
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) x.worth += p.val[nm] * (p.items?.[nm] || 1);
-    x.por[dm] = (x.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
+    addPor(x.por, k, p);
   }
-  for (const x of Object.values(days)) { x.meals = Object.values(x.por).reduce((a, n) => a + n, 0); x.paid = Object.values(x.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
+  for (const x of Object.values(days)) { Object.assign(x, porSum(x.por)); }
   const now = todayYmd().slice(0, 6);
   const keys = Object.keys(months).sort().reverse(), tabs = [...new Set([now, ...keys])].sort().reverse().slice(0, 4);
   if (!tabs.includes(S.repMonth)) S.repMonth = now;
@@ -1369,8 +1380,8 @@ function message(d) {
 }
 const MEMO_TO = "Dear 충토."; // 메모 앞에 붙는 받는 사람
 // 전달사항 댓글: 날짜마다. 쓴 사람은 기기마다 한 번 골라 두고, 지운 것은 쓴 사람만
-const WHO = ["aude", "충토"];
-let who = ""; try { who = localStorage.getItem("takeout-who") || ""; } catch (_) {}
+const WHO = ["아가", "충토"];
+let who = ""; try { who = localStorage.getItem("takeout-who") || ""; if (who === "aude") who = "아가"; if (!WHO.includes(who)) who = ""; } catch (_) {}
 function cmtHtml(d) {
   const list = Object.entries(S.cmt).filter(([, c]) => c.d === d).sort((a, b) => a[1].t - b[1].t);
   const hm = (t) => new Date(t + 9 * 3600e3).toISOString().slice(11, 16);

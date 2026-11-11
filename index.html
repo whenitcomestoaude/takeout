@@ -520,6 +520,20 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .fbar p { margin: 0; text-align: center; font-size: 11px; color: var(--muted); }
 .sheet .memo { width: 100%; margin-top: 0; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 14px var(--sans); }
 .sheet .memo::placeholder { color: var(--muted); }
+.cmts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.cmts:empty { display: none; }
+.cmts li { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 18px; padding: 0 4px; }
+.cmts li b { flex: none; font-weight: 600; font-size: 12px; }
+.cmts li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cmts li time { flex: none; font-size: 11px; color: var(--muted); }
+.cmts li .lnk { flex: none; padding: 0 2px; font-size: 14px; line-height: 18px; color: var(--muted); }
+.cmtrow { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.cmtrow input { flex: 1; min-width: 0; padding: 8px 12px; border: 0; border-radius: 999px; background: var(--well); color: var(--ink); font: 400 13px var(--sans); }
+.cmtrow input::placeholder { color: var(--muted); }
+.cmtrow input:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--gold-deep); }
+.whoc { flex: none; padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.whoc.none { color: var(--muted); font-weight: 400; }
+.cmtsend { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--ink); color: var(--page); }
 .sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
 .sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
 .sheet h3 .ate { margin-left: auto; margin-right: 12px; padding: 4px 10px; border-radius: 999px; background: var(--well); color: var(--ink); font-size: 11px; font-weight: 600; }
@@ -547,7 +561,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
   <div class="gutter">
     <div class="nums" id="nums" hidden></div><div class="meter" id="meter"></div>
     <div class="prow"><span class="plabel" id="plabel"></span>
-      <div class="pctl"><button class="half" id="half" aria-pressed="false" aria-label="2코인은 아침 식사">아침 식사</button>
+      <div class="pctl"><button class="half" id="half" aria-pressed="false" aria-label="2코인은 아침 식사로 남겨 둠">아침 식사</button>
       <div class="portions sg" id="portions" aria-label="추가취식">
         <button data-portion="1">기본</button><button data-portion="2">+1</button><button data-portion="3">+2</button>
       </div></div>
@@ -574,7 +588,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, share: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stockBy: (() => { try { return localStorage.getItem("takeout-stockby") === "date" ? "date" : "cat"; } catch (_) { return "cat"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, share: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, cmt: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stockBy: (() => { try { return localStorage.getItem("takeout-stockby") === "date" ? "date" : "cat"; } catch (_) { return "cat"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -704,9 +718,7 @@ function commitDay(d) {
     }
     p.done = true;
     p.val = Object.fromEntries(items.filter((x) => x.price && p.items?.[x.name]).map((x) => [x.name, x.price])); p.paid = (portionsOf(k) - 1) * EXTRA_FEE;
-    // 아침 식사로 먹은 2코인: 무엇을 먹었는지는 모르니, 그날 그 식당 메뉴의 코인당 시중가 평균으로 값을 어림한다
-    if (S.share[k]) { const pc = items.filter((x) => x.price && x.coin > 0 && !x.drink).map((x) => x.price / x.coin);
-      p.bf = SHARE; p.bfv = pc.length ? Math.round(pc.reduce((a, v) => a + v, 0) / pc.length * SHARE / 10) * 10 : 0; delete S.share[k]; }
+    delete S.share[k];
     // 끝난 끼니는 카트에서 빼고 기록으로만 남긴다(횟수 세기용). 같은 끼니를 다시 담으면 새로 시작한다.
     S.picks[`${k}#${Date.now().toString(36)}`] = p; delete S.picks[k];
   }
@@ -735,12 +747,11 @@ function freq() {
   return f;
 }
 const portionsOf = (k) => { const v = S.portions[k]; return v === true ? 2 : (v || 1); };
-// 아침 식사: 한 끼 4코인 중 2코인은 그 자리에서 아침으로 먹는다 — 그 칸의 테이크아웃 한도에서 뺀다
+// 아침 식사: 2코인은 일부러 남겨 두었다는 표시(아침으로 먹을 몫). 한도는 그대로 두고 보내는 사람에게 알리기만 한다
 const SHARE = 2;
-const shareOf = (k) => (S.share[k] ? SHARE : 0);
 
 // ---------- budget: 1인분 = 4코인 + 음료 1, 4코인을 넘긴 만큼 음료 자리를 쓰고 그 음료는 지정 ----------
-function budget(items, sel, n, r = 0) {
+function budget(items, sel, n) {
   let coins = 0, drinks = 0, unknown = 0, pickIn = false;
   for (const it of items) {
     const q = sel[it.name] || 0;
@@ -748,7 +759,7 @@ function budget(items, sel, n, r = 0) {
     if (/pick/i.test(it.tag || "")) pickIn = true;
     if (it.drink) drinks += q; else if (it.coin == null) unknown += q; else coins += it.coin * q;
   }
-  const base = 4 * n - r, cap = pickIn ? base : 5 * n - r; // Pick(3코인)은 사이드 하나와 짝 — 5코인째(지정 음료)는 없다
+  const base = 4 * n, cap = pickIn ? base : 5 * n; // Pick(3코인)은 사이드 하나와 짝 — 5코인째(지정 음료)는 없다
   const fixed = Math.min(n, Math.max(0, coins - base));
   const drinkMax = n - fixed;
   return { coins, drinks, unknown, pickIn, base, cap, fixed, drinkMax, over: coins > cap || drinks > drinkMax };
@@ -776,14 +787,14 @@ const J = (v) => JSON.stringify(v ?? null);
 const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
 function snapshot() {
   const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
-  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
+  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), cmt: pruned(S.cmt), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
 }
 // 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
 const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
 const norm = (v) => { v = clone(v) || {}; v.picks = mig(v.picks); v.portions = mig(v.portions || v.extra); delete v.extra; return v; };
 function merge3(b, mine, theirs) {
   const out = { ...theirs, view: mine.view, rest: mine.rest }; // 보기·식당 탭은 기기마다 제 것을 쓴다
-  for (const f of ["picks", "portions", "share", "rank", "mode", "ate", "memo", "rate"]) {
+  for (const f of ["picks", "portions", "share", "rank", "mode", "ate", "memo", "cmt", "rate"]) {
     const B = b[f] || {}, M = mine[f] || {}, T = theirs[f] || {}, o = {};
     for (const k of new Set([...Object.keys(M), ...Object.keys(T)])) { const v = J(M[k]) !== J(B[k]) ? M[k] : T[k]; if (v !== undefined) o[k] = v; }
     out[f] = o;
@@ -803,7 +814,7 @@ function applyState(v) {
   S.fav = new Set(v.fav || []); S.picks = v.picks || {}; S.portions = v.portions || {}; S.share = v.share || {};
   if (v.rest) S.rest = v.rest;
   S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock : []; S.eaten = Array.isArray(v.eaten) ? v.eaten : [];
-  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.rate = v.rate || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
+  S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.cmt = v.cmt || {}; S.rate = v.rate || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
   archiveDone();
 }
 const remoteState = async () => { const snap = await docRef.get(); return snap.exists ? norm(snap.data()) : null; };
@@ -816,12 +827,18 @@ function save() {
       const mine = snapshot(), theirs = await remoteState();
       const merged = theirs ? merge3(base, mine, theirs) : mine;
       if (saveTimer) return; // 읽는 사이 또 고쳤다 — 다음 저장이 이어서 합친다
-      if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) render(); }
+      if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) keepTyping(render); }
       await docRef.set(merged); base = merged;
     } catch (e) { console.warn(e); }
   }, 700);
 }
 // 화면으로 돌아올 때: 상대가 고친 것을 받아 온다
+// 다른 기기 변경을 받아 다시 그릴 때, 치던 댓글은 그대로 둔다
+function keepTyping(fn) {
+  const ae = document.activeElement, keep = ae?.id === "cmtin" ? { v: ae.value, s: ae.selectionStart } : null;
+  fn();
+  const ni = keep && $("cmtin"); if (ni) { ni.value = keep.v; ni.focus(); try { ni.setSelectionRange(keep.s, keep.s); } catch (_) {} }
+}
 async function pull() {
   if (!docRef || saveTimer || S.pulling) return;
   S.pulling = true;
@@ -829,7 +846,7 @@ async function pull() {
     const theirs = await remoteState(); if (!theirs || saveTimer) return;
     const mine = snapshot(), merged = merge3(base, mine, theirs);
     base = theirs;
-    if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) render(); }
+    if (J(merged) !== J(mine)) { applyState(clone(merged)); if (S.rows.length) keepTyping(render); }
     if (J(merged) !== J(theirs)) save();
   } catch (e) { console.warn(e); } finally { S.pulling = false; }
 }
@@ -890,7 +907,7 @@ function render() {
   const f = freq();
   const n = portionsOf(k);
   // Pick 이 끼면 4코인(×인분)을 넘길 수 없다 — 넘치는 메뉴는 비활성으로 보여준다
-  const bud = budget(all, sel, portionsOf(k), shareOf(k));
+  const bud = budget(all, sel, portionsOf(k));
   S.blocked = (it) => !S.edit && !sel[it.name] && !it.drink && it.coin != null && (bud.pickIn || isPick(it)) && bud.coins + it.coin > bud.base;
 
   {
@@ -1074,7 +1091,7 @@ function tile(it, q, times, hidden) {
   </div>`;
 }
 function renderTray(items, sel, n, k) {
-  const b = budget(items, sel, n, shareOf(k));
+  const b = budget(items, sel, n);
   $("half").setAttribute("aria-pressed", String(!!S.share[k])); $("half").hidden = S.meal !== "1" && !S.share[k];
   $("tray").hidden = false;
   $("tray").classList.toggle("over", b.over);
@@ -1093,7 +1110,7 @@ function renderTray(items, sel, n, k) {
   const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.d === S.date && r.m === m));
   $("meter").style.gridTemplateColumns = `auto repeat(${S.rests.length}, minmax(0, 1fr))`;
   $("meter").innerHTML = `<span></span>${S.rests.map((x) => `<span class="mh${x.id === S.rest ? " cur" : ""}">${esc(x.name)}</span>`).join("")}` + meals.map((m) =>
-    `<b class="ml${m === S.meal ? " cur" : ""}">${MEALS[m]}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk), shareOf(kk));
+    `<b class="ml${m === S.meal ? " cur" : ""}">${MEALS[m]}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
       const np = portionsOf(kk);
       return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}">${pillOf(bb)}${np > 1 || S.share[kk] ? `<em>${[np > 1 ? `+${np - 1}` : "", S.share[kk] ? "아침 식사" : ""].filter(Boolean).join(" · ")}</em>` : ""}</button>`; }).join("")).join("");
   $("plabel").innerHTML = `<b>${MEALS[S.meal] || ""} · ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")}</b>${worthHtml(items, sel)}`;
@@ -1225,7 +1242,7 @@ function dailyHtml(ym, days) {
     return `<span class="${d === S.repDay ? "cur" : ""}">${x ? "<i></i>".repeat(Math.min(x.meals, 8)) : ""}</span>`; }).join("");
   return `<p class="gh">날짜별</p><section class="daily"><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="mdots" aria-hidden="true">${dots}</div><div class="ticks">${ticks}</div>
     <ul class="lg dlg"><li><i class="sv"></i>아낀 금액</li><li><i class="pd"></i>지출</li><li><i class="ml2"></i>취식</li></ul>
-    <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼${sel.bf ? ` · 아침 식사 ${sel.bf}회` : ""}</p></section>`;
+    <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼</p></section>`;
 }
 const wonN = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
 function renderReport(el) {
@@ -1234,7 +1251,6 @@ function renderReport(el) {
     if (!p.done || !p.val) continue;
     const ym = k.split("|")[1].slice(0, 6), mth = (months[ym] ||= { worth: 0, paid: 0, meals: 0, por: {} });
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) mth.worth += p.val[nm] * (p.items?.[nm] || 1);
-    if (p.bf) { mth.worth += p.bfv || 0; mth.bf = (mth.bf || 0) + 1; }
     // 낸 돈은 끼니 단위로 센다: 한 끼에 가져온 인분(식당이 둘이면 둘을 더함)에서 1인분을 뺀 만큼이 추가취식
     const dm = k.split("|")[1].split("#")[0];
     mth.por[dm] = (mth.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
@@ -1246,7 +1262,6 @@ function renderReport(el) {
     if (!p.done || !p.val) continue;
     const dm = k.split("|")[1].split("#")[0], d = dm.slice(0, 8), x = (days[d] ||= { worth: 0, por: {} });
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) x.worth += p.val[nm] * (p.items?.[nm] || 1);
-    if (p.bf) { x.worth += p.bfv || 0; x.bf = (x.bf || 0) + 1; }
     x.por[dm] = (x.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
   }
   for (const x of Object.values(days)) { x.meals = Object.values(x.por).reduce((a, n) => a + n, 0); x.paid = Object.values(x.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
@@ -1254,7 +1269,6 @@ function renderReport(el) {
   const keys = Object.keys(months).sort().reverse(), tabs = [...new Set([now, ...keys])].sort().reverse().slice(0, 4);
   if (!tabs.includes(S.repMonth)) S.repMonth = now;
   const cur = S.repMonth, m0 = months[cur] || { worth: 0, paid: 0, meals: 0 };
-  const bfTxt = (x) => (x.bf ? ` · 아침 식사 ${x.bf}회` : "");
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const max = Math.max(1, ...keys.map((ym) => months[ym].worth - months[ym].paid));
   const total = keys.reduce((a, ym) => a + months[ym].worth - months[ym].paid, 0);
@@ -1264,19 +1278,18 @@ function renderReport(el) {
     if (!p.done || k.split("|")[1].slice(0, 6) !== cur) continue;
     const [r, dm] = k.split("|"), d = dm.slice(0, 8), m = dm.slice(9, 10), rn = S.rests.find((x) => x.id === r)?.name || "";
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok") got.push({ nm, d, m, rn, q: p.items?.[nm] || 1, v: p.val?.[nm] || 0 });
-    if (p.bf) got.push({ nm: `아침 식사 ${p.bf}코인`, bf: true, d, m, rn, q: 1, v: p.bfv || 0 });
   }
   got.sort((a, b) => b.d.localeCompare(a.d) || a.m.localeCompare(b.m));
   $("althead").innerHTML = `<div class="when"><div class="week">${tabs.map((ym) => `<button class="day" data-rmonth="${ym}" aria-pressed="${ym === cur}"><span class="dn">${+ym.slice(4)}</span><span class="wl">${MON[+ym.slice(4) - 1]}</span></button>`).join("")}</div>
     <div class="sum">${keys.length ? `지금까지 <b>약 ${wonN(total)}</b>` : ""}</div></div>`;
   el.innerHTML = `<div class="panel rep">
     <div class="rep-hero"><small>${+cur.slice(4)}월에 아낀 금액</small><b>${m0.meals ? `약 ${wonN(m0.worth - m0.paid)}` : "–"}</b>
-      <span>${m0.meals ? `${m0.meals}끼${bfTxt(m0)}${m0.paid ? ` · 지출의 ${(m0.worth / m0.paid).toFixed(1)}배 가치` : " · 지출 없음"}` : "테이크아웃한 식사가 없습니다."}</span></div>
+      <span>${m0.meals ? `${m0.meals}끼${m0.paid ? ` · 지출의 ${(m0.worth / m0.paid).toFixed(1)}배 가치` : " · 지출 없음"}` : "테이크아웃한 식사가 없습니다."}</span></div>
     ${m0.meals ? cmpHtml(m0) + dailyHtml(cur, days) : ""}
     ${keys.length > 1 ? `<p class="gh">월별</p><ul class="rows">${keys.map((ym) => { const x = months[ym], mx = Math.max(1, ...keys.map((y) => months[y].worth));
-      return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼${bfTxt(x)}</em></span></li>`; }).join("")}</ul>` : ""}
-    ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? `${g.bf ? "약 " : ""}${wonN(g.v * g.q)}` : "–"}</span></li>`).join("")}</ul>` : ""}
-    ${keys.length || got.length ? `<p class="none">시중가는 AI 검색 결과로 추정치입니다.${keys.some((ym) => months[ym].bf) ? " 아침 식사는 그날 메뉴의 코인당 평균 시중가로 어림했습니다." : ""}</p>` : ""}</div>`;
+      return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
+    ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? wonN(g.v * g.q) : "–"}</span></li>`).join("")}</ul>` : ""}
+    ${keys.length || got.length ? `<p class="none">시중가는 AI 검색 결과로 추정치입니다.</p>` : ""}</div>`;
   el.hidden = false;
 }
 function renderSheet() {
@@ -1289,7 +1302,7 @@ function renderSheet() {
   for (const m of Object.keys(MEALS)) pickedRests(S.date, m).forEach((x, ri, arr) => {
     const k = keyOf(S.date, m, x.id), s = S.picks[k]?.items || {};
     const by = Object.fromEntries(itemsFor(S.date, m, x.id).map((it) => [it.name, it]));
-    const extra = (portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "") + (S.share[k] ? `<i>아침 식사 ${SHARE}코인</i>` : "");
+    const extra = (portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "") + (S.share[k] ? `<i>${SHARE}코인 아침 식사</i>` : "");
     // 한 끼니에 두 곳을 담았으면 둘 중 하나라는 뜻 — 순위를 눌러 바꾼다
     const md = modeOf(S.date, m), mk = `${S.date}-${m}`;
     const rk = arr.length > 1 && md === "rank" ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${mk}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
@@ -1314,7 +1327,7 @@ function renderSheet() {
       }).join("") + "</ul>";
   });
   const pend = pendingKeys(S.date).length;
-  if (body) body = `<p class="gh">전달사항</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">` + body
+  if (body) body = `<p class="gh">전달사항</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">${cmtHtml(S.date)}` + body
     + `<div class="fbar"><span class="shwrap"><button class="copy shico" id="share" aria-haspopup="true" aria-label="공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><span class="shmenu" id="shmenu" hidden><button id="copy">텍스트로 복사</button><button id="shareimg">이미지로 공유</button></span></span><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>테이크아웃 완료한 메뉴는 STOCK에서 관리할 수 있습니다.</p></div>`;
   const open = el.querySelector("#shmenu") && !el.querySelector("#shmenu").hidden;
   el.innerHTML = `<div class="panel">${body || `<p class="none">이 날짜에 담은 메뉴가 없습니다.</p>`}</div>`;
@@ -1344,17 +1357,32 @@ function message(d) {
       if (!sections.has(sec)) sections.set(sec, []);
       sections.get(sec).push(label);
     }
-    const b = budget(items, sel, n, shareOf(k));
+    const b = budget(items, sel, n);
     if (b.fixed) drink.push(b.fixed > 1 ? `지정 음료 ×${b.fixed}` : "지정 음료");
     const lines = [`${m === "1" ? "🌅" : "🌙"} ${dateLabel(d)} ${MEALS[m]} · ${x.name}${rk}${n > 1 ? `  ➕ 추가취식 ${n - 1}회` : ""}`];
     for (const c of [...sections.keys()].sort((a, b2) => rank(a) - rank(b2))) lines.push(`[${c}] ${sections.get(c).join(" / ")}`);
     if (drink.length) lines.push(`🥤 ${drink.join(" / ")}`);
-    if (S.share[k]) lines.push(`🍳 아침 식사 ${SHARE}코인은 따로`);
+    if (S.share[k]) lines.push(`🍳 ${SHARE}코인은 아침 식사로 남겨 둠`);
     out.push(lines.join("\n"));
   }
   return out.join("\n\n");
 }
 const MEMO_TO = "Dear 충토."; // 메모 앞에 붙는 받는 사람
+// 전달사항 댓글: 날짜마다. 쓴 사람은 기기마다 한 번 골라 두고, 지운 것은 쓴 사람만
+const WHO = ["aude", "충토"];
+let who = ""; try { who = localStorage.getItem("takeout-who") || ""; } catch (_) {}
+function cmtHtml(d) {
+  const list = Object.entries(S.cmt).filter(([, c]) => c.d === d).sort((a, b) => a[1].t - b[1].t);
+  const hm = (t) => new Date(t + 9 * 3600e3).toISOString().slice(11, 16);
+  return `<ul class="cmts">${list.map(([id, c]) => `<li><b>${esc(c.w)}</b><span>${esc(c.x)}</span><time>${hm(c.t)}</time>${c.w === who ? `<button class="lnk" data-uncmt="${esc(id)}" aria-label="댓글 지우기">×</button>` : ""}</li>`).join("")}</ul>
+    <div class="cmtrow"><button class="whoc${who ? "" : " none"}" id="whoc" aria-label="쓰는 사람 바꾸기">${esc(who || "누구?")}</button><input id="cmtin" maxlength="80" enterkeyhint="send" autocomplete="off" placeholder="댓글"><button class="cmtsend" id="cmtsend">등록</button></div>`;
+}
+function addCmt() {
+  const el = $("cmtin"), x = (el?.value || "").trim(); if (!x) return;
+  if (!who) { toast("이름을 먼저 골라 주세요"); return; }
+  S.cmt[`${S.date}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`] = { d: S.date, w: who, t: Date.now(), x };
+  save(); render(); $("cmtin")?.focus();
+}
 // ---------- image card ----------
 // 카톡에 그대로 올릴 수 있는 한 장: 날짜 제목 → 끼니·식당별로 진열대 순서의 메뉴
 function cardBlocks(d) {
@@ -1372,7 +1400,7 @@ function cardBlocks(d) {
     }
     // Deli·Side·Pick 이 있는 식당은 같은 구분끼리 모은다 (음료는 맨 뒤)
     if (rows.some((r) => r.tag)) { const o = { Deli: 0, Pick: 1, Side: 2 }; rows.forEach((r, i) => { r.i = i; }); rows.sort((a, b2) => (a.drink - b2.drink) || ((o[a.tag] ?? 3) - (o[b2.tag] ?? 3)) || (a.i - b2.i)); }
-    const b = budget(items, sel, n, shareOf(k));
+    const b = budget(items, sel, n);
     if (b.fixed) rows.push({ text: "지정 음료", q: b.fixed, drink: true });
     out.push({ title: MEALS[m], rest: x.name, extra: n - 1, rows, rank: arr.length > 1 && modeOf(d, m) === "rank" ? ri + 1 : 0, join: ri > 0 ? JOIN[modeOf(d, m)] : "" });
   });
@@ -1506,6 +1534,7 @@ function handle(e) {
 }
 // click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
 document.addEventListener("click", (e) => handle(e), true);
+document.addEventListener("keydown", (e) => { if (e.target.id === "cmtin" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); addCmt(); } });
 // 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
 document.addEventListener("input", (e) => {
   if (e.target.id === "q") { S.q = e.target.value; const lb = $("lbody"); if (lb) lb.innerHTML = S.find(S.q); return; }
@@ -1619,6 +1648,9 @@ function onTap(e) {
   if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.cat) { S.q = null; S.cat = b.dataset.cat; S.catTouched = true; render(); b.scrollIntoView({ inline: "center", block: "nearest" }); return; }
   if (b.dataset.portion) { S.portions[k] = +b.dataset.portion; save(); render(); return; }
+  if (b.id === "whoc") { who = WHO[(WHO.indexOf(who) + 1) % WHO.length]; try { localStorage.setItem("takeout-who", who); } catch (_) {} render(); return; }
+  if (b.id === "cmtsend") { addCmt(); return; }
+  if (b.dataset.uncmt) { delete S.cmt[b.dataset.uncmt]; save(); render(); return; }
   if (b.id === "half") { if (S.share[k]) delete S.share[k]; else S.share[k] = true; save(); render(); return; }
   if (b.id === "edit") { S.edit = !S.edit; render(); return; }
   if (b.id === "ratefold") { S.rateOpen = !S.rateOpen; S.rateOrder = null; renderSheet(); return; }

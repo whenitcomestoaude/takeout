@@ -775,7 +775,7 @@ const J = (v) => JSON.stringify(v ?? null);
 const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
 function snapshot() {
   const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
-  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-20), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
+  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-1000), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
 }
 // 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
 const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
@@ -1619,15 +1619,15 @@ function onTap(e) {
 
   if (b.dataset.eat != null) { // 먹었어요: 하나씩 줄고, 다 먹으면 사라진다
     const e = S.stock.find((x) => x.src === b.dataset.eat); if (!e) return;
-    S.eaten.push({ ...e, q: 1 }); S.eaten = S.eaten.slice(-20);
+    S.eaten.push({ ...e, q: 1, a: Date.now() }); /* a: 먹은 시각 (d 는 가져온 날) */ S.eaten = S.eaten.slice(-1000);
     if (e.q > 1) e.q -= 1; else S.stock = S.stock.filter((x) => x !== e);
     save(); render(); return;
   }
   if (b.dataset.eatsel != null) { const k2 = b.dataset.eatsel; if (S.eatSel.has(k2)) S.eatSel.delete(k2); else S.eatSel.add(k2); renderSheet(); return; }
   if (b.id === "eatdone") { // 취식 완료: 체크한 것을 하나씩 먹은 것으로 옮긴다
     for (const src of S.eatSel) { const e = S.stock.find((x) => x.src === src); if (!e) continue;
-      S.eaten.push({ ...e, q: 1 }); if (e.q > 1) e.q -= 1; else S.stock = S.stock.filter((x) => x !== e); }
-    S.eaten = S.eaten.slice(-20); S.eatSel.clear(); save(); render(); toast("RATINGS에 추가됨"); return;
+      S.eaten.push({ ...e, q: 1, a: Date.now() }); /* a: 먹은 시각 (d 는 가져온 날) */ if (e.q > 1) e.q -= 1; else S.stock = S.stock.filter((x) => x !== e); }
+    S.eaten = S.eaten.slice(-1000); S.eatSel.clear(); save(); render(); toast("RATINGS에 추가됨"); return;
   }
   if (b.dataset.rfil != null) { S.rateFilter = +b.dataset.rfil || null; renderSheet(); scrollTo(0, 0); return; }
   if (b.dataset.rate != null) { // 별점: 같은 점수를 다시 누르면 지운다

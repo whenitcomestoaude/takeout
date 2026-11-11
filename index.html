@@ -126,6 +126,8 @@ button:focus-visible { outline: 2px solid var(--btn); outline-offset: 2px; }
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: .5px solid var(--line); }
 .band .gutter { padding-block: 14px 14px; display: grid; gap: 14px; }
 .util { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+body.tab-menu .rtabs button { font-size: 15px; }
+body.tab-menu .rtabs { gap: 18px; }
 .rtabs { display: flex; gap: 14px; }
 .rtabs button { font-size: 13px; color: var(--muted); padding: 2px 0; }
 .rtabs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
@@ -176,7 +178,7 @@ svg.ln { fill: none !important; stroke: currentColor; stroke-width: 1.5; stroke-
 .rail button.off { text-decoration: line-through; opacity: .5; }
 
 /* list */
-main .gutter { padding-block: 20px calc(170px + env(safe-area-inset-bottom, 0px)); }
+main .gutter { padding-block: 20px calc(215px + env(safe-area-inset-bottom, 0px)); }
 .hint { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
 .hint .hrt { display: inline-block; width: 11px; height: 11px; vertical-align: -1px; }
 .viewopt { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: -4px 0 16px; }
@@ -249,7 +251,7 @@ main .gutter { padding-block: 20px calc(170px + env(safe-area-inset-bottom, 0px)
 .radd .rt { min-width: 0; }
 /* 떠 있는 미터와 내비 뒤로 목록이 비쳐 어지럽지 않게, 아래를 바탕색으로 덮는다 */
 body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: calc(96px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--bg) 62%, transparent); pointer-events: none; z-index: 5; }
-body.tab-menu::after { height: calc(176px + env(safe-area-inset-bottom, 0px)); }
+body.tab-menu::after { height: calc(216px + env(safe-area-inset-bottom, 0px)); }
 body.tab-cart::after, body.tab-stock::after { height: calc(220px + env(safe-area-inset-bottom, 0px)); }
 .rsub .coin i { width: 6px; height: 6px; }
 .rq { display: inline-flex; align-items: center; font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -284,7 +286,7 @@ body.tab-cart::after, body.tab-stock::after { height: calc(220px + env(safe-area
 .tray { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 6; max-width: 616px; margin: 0 auto; background: var(--tile); border-radius: 26px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29, 27, 20, .14); }
 .tray { cursor: pointer; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); border-radius: 20px; }
 
-.tray .gutter { display: grid; gap: 6px; padding: 10px 10px 10px 18px; }
+.tray .gutter { display: grid; gap: 6px; padding: 10px 10px 10px 14px; }
 /* 아래 내비: 떠 있는 알약. Menu / Cart / Stock / Report */
 .nav { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 6; max-width: 616px; margin: 0 auto; height: 56px; padding: 4px; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--tile); border-radius: 999px; box-shadow: 0 0 0 .5px var(--line), 0 8px 32px rgba(29,27,20,.14); }
 .nav button { position: relative; display: grid; justify-items: center; align-content: center; gap: 3px; border-radius: 999px; color: var(--muted); font-size: 9.500px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
@@ -369,7 +371,19 @@ i.sv { background: var(--viz-save); } i.pd { background: var(--viz-paid); }
 .psheet .pedit .copy { padding: 0 20px; }
 .worth { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .worth b { font-size: 10px; font-weight: 600; letter-spacing: .06em; margin-right: 4px; }
-.meter { display: grid !important; gap: 6px; }
+.meter { display: grid !important; gap: 4px 6px; align-items: center; }
+.mh { font-size: 10px; color: var(--muted); padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh.cur { color: var(--ink); font-weight: 600; }
+.ml { font-size: 12px; font-weight: 400; color: var(--muted); padding-right: 6px; white-space: nowrap; }
+.ml.cur { color: var(--ink); font-weight: 600; }
+.mc { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 5px 10px; border-radius: 12px; white-space: nowrap; opacity: .55; }
+.mc.cur { background: var(--well); opacity: 1; }
+.mc > em { font-style: normal; font-size: 10px; font-weight: 600; color: var(--muted); margin-left: auto; }
+.prow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.plabel { font-size: 11px; color: var(--muted); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plabel b { color: var(--ink); font-weight: 600; margin-right: 8px; }
+.plabel .worth b { color: var(--muted); margin-right: 4px; }
+#worth:empty { display: none; }
 .pill .dot { align-self: center; width: 7px; height: 7px; border-radius: 50%; background: currentColor; text-decoration: none; opacity: .7; }
 .pill .dot.o { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
 .pill i { margin-right: 3px !important; }
@@ -472,6 +486,8 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .sheet .rows li.tied .sbody { padding-top: 0; }
 .ssub { font-size: 11px; color: var(--muted); }
 .tg { display: inline-block; font-style: normal; font-size: 10px; font-weight: 600; line-height: 16px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--well); color: var(--muted); vertical-align: 1px; white-space: nowrap; }
+.kd { flex: none; display: inline-block; font-style: normal; font-size: 9.500px; font-weight: 600; letter-spacing: .04em; line-height: 16px; padding: 0 6px; border-radius: 999px; white-space: nowrap; }
+.kd.dl { background: var(--coin); color: var(--btn-ink); } .kd.pk { background: var(--coin-pick); color: #fff; } .kd.sd { background: var(--well); color: var(--ink); }
 .tg.fz { background: none; box-shadow: inset 0 0 0 1px var(--gold-deep); color: var(--gold-deep); }
 .xq { font-style: normal; font-size: 11px; font-weight: 600; color: var(--gold-deep); background: var(--soft); border-radius: 999px; padding: 2px 7px; margin-left: 4px; }
 .stockp .rows li { grid-template-columns: 22px minmax(0, 1fr) auto; padding-right: 16px; }
@@ -506,8 +522,8 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 <div class="top">
 <header class="band">
   <div class="gutter">
-    <div class="util"><b class="ptitle" id="ptitle" hidden></b><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="utilr"><span class="livew" id="live" hidden role="status"><i class="live"></i>동시접속중</span><button id="stamp" aria-label="메뉴 새로 가져오기"></button></span></div>
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
+    <div class="util"><b class="ptitle" id="ptitle" hidden></b><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="utilr"><span class="livew" id="live" hidden role="status"><i class="live"></i>동시접속중</span><button id="stamp" aria-label="메뉴 새로 가져오기"></button></span></div>
   </div>
 </header>
 <div class="gutter althead" id="althead" hidden></div>
@@ -517,12 +533,13 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 
 <div class="tray" id="tray" hidden>
   <div class="gutter">
-    <div class="tally">
-      <div class="tl"><div class="nums" id="nums" hidden></div><div class="meter" id="meter"></div></div>
+    <div class="nums" id="nums" hidden></div><div class="meter" id="meter"></div>
+    <div class="prow"><span class="plabel" id="plabel"></span>
       <div class="portions sg" id="portions" aria-label="추가취식">
         <button data-portion="1">기본</button><button data-portion="2">+1</button><button data-portion="3">+2</button>
       </div>
     </div>
+
     <div class="note" id="note" hidden></div>
   </div>
 </div>
@@ -595,7 +612,10 @@ function probePhotos(p) {
   const im = new Image(); im.onload = () => { S.canPhoto = true; render(); }; im.src = thumbOf(p);
 }
 const photoBtn = (it) => (S.canPhoto && it.photo ? `<span class="ph" role="button" data-photo="${esc(it.name)}" aria-label="${esc(it.name)} 사진"><img loading="lazy" alt="" src="${esc(thumbOf(it.photo))}"></span>` : "");
-const tagText = (it) => [/pick/i.test(it.tag || "") ? "Pick" : it.tag ? it.tag[0] + it.tag.slice(1).toLowerCase() : "", it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
+const tagText = (it) => [it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제" : ""].filter(Boolean).join(" · ");
+// 현장 구분(패밀리홀): 코인 점 대신 DELI / SIDE / 1PICK / 2PICK 칩으로. 구분이 없는 식당(R5)은 코인 점.
+const kindChip = (it) => { const t = (it.tag || "").toUpperCase(); if (!t) return ""; const c = /PICK/.test(t) ? "pk" : t === "DELI" ? "dl" : "sd"; return `<i class="kd ${c}">${esc(t)}</i>`; };
+const lead2 = (it, dots) => kindChip(it) || (dots ? `<span class="coin">${dots}</span>` : "");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
 const MINUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7"/></svg>', PLUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7M6 2.500v7"/></svg>';
 const won = (it) => (it?.price ? `${it.est ? "약\u00a0" : ""}${it.price.toLocaleString("ko-KR")}\u2060원` : "");
@@ -928,7 +948,7 @@ function rowHtml(it, q, plain) {
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span></span>${photoBtn(it)}
+      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${lead2(it, dots)}<span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span></span>${photoBtn(it)}
     </button>
     <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">${PLUS}</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
@@ -1016,7 +1036,7 @@ function tile(it, q, times, hidden) {
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
       <span class="nrow">${photoBtn(it)}<span class="name">${soldChip(it)}${n}</span></span>
-      <span class="rsub">${dots ? `<span class="coin${/pick/i.test(it.tag || "") ? " pk" : ""}">${dots}</span>` : ""}<span>${esc(sub)}${priceTag(it, sub)}</span></span>
+      <span class="rsub">${lead2(it, dots)}<span>${esc(sub)}${priceTag(it, sub)}</span></span>
     </button>
     <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
     ${q ? `<span class="rq"><button data-sub="${n}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${n}" aria-label="하나 더">${PLUS}</button></span>` : ""}
@@ -1034,27 +1054,17 @@ function renderTray(items, sel, n) {
   const st = (v, max, over) => over ? "over" : v === 0 ? "" : v >= max ? "full" : "part";
   const coinCls = st(b.coins, b.base, b.coins > b.cap);
   const drinkCls = st(b.drinks, b.drinkMax, b.drinks > b.drinkMax);
-  // 미터: 이 날의 아침·저녁을 한 줄씩, 식당과 상관없이 담긴 것을 보여 준다(지금 보는 끼니는 진하게).
-  //  · 한 끼에 두 식당을 담았고 '그리고'면 둘을 합쳐서, '순위·또는'면 지금 보는 식당(비어 있으면 담긴 쪽)을 앞에 두고 다른 쪽은 작게 붙인다.
+  // 미터: 끼니(줄) × 식당(칸). 칸마다 따로 세고, 지금 보는 칸을 진하게 한다. 칸을 누르면 그 끼니·식당으로 간다.
+  // 추가취식(기본/+1/+2)은 지금 보는 칸의 것이고, 누르는 즉시 그 칸의 한도가 늘어난다(담은 것이 없어도).
   const pillOf = (x) => `<span class="pill ${st(x.coins, x.base, x.coins > x.cap)}"><b>${x.coins}</b><i>/${x.base}</i><u class="dot"></u></span>` +
-    `<span class="pill ${st(x.drinks, x.drinkMax, x.drinks > x.drinkMax)}"><b>${x.drinks}</b><i>/${x.drinkMax}</i><u class="dot o"></u>${x.fixed ? `<em>+지정 ${x.fixed}</em>` : ""}</span>`;
-  $("meter").innerHTML = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.d === S.date && r.m === m)).map((m) => {
-    const per = S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), s2 = S.picks[kk]?.items || {}; return { x, has: Object.keys(s2).length > 0, b: budget(itemsFor(S.date, m, x.id), s2, portionsOf(kk)) }; });
-    const withP = per.filter((q) => q.has);
-    let main, tail = "";
-    if (withP.length > 1 && modeOf(S.date, m) === "and") {
-      const sum = (f) => withP.reduce((a, q) => a + q.b[f], 0), mx = (f) => Math.max(...withP.map((q) => q.b[f]));
-      main = { coins: sum("coins"), drinks: sum("drinks"), fixed: sum("fixed"), base: sum("base"), cap: sum("cap"), drinkMax: sum("drinkMax") };
-      tail = `<em>${withP.map((q) => esc(q.x.name)).join(" + ")}</em>`;
-    } else {
-      const pick = withP.find((q) => q.x.id === S.rest) || withP[0] || per.find((q) => q.x.id === S.rest) || per[0];
-      main = pick.b;
-      const others = withP.filter((q) => q !== pick);
-      if (pick.has && (pick.x.id !== S.rest || others.length)) tail = `<em>${esc(pick.x.name)}</em>`;
-      tail += others.map((q) => `<em class="alt">${esc(q.x.name)} ${q.b.coins}/${q.b.base}</em>`).join("");
-    }
-    return `<p class="mrow${m === S.meal ? " cur" : ""}"><b>${MEALS[m]}</b>${pillOf(main)}${tail}</p>`;
-  }).join("") + worthHtml(items, sel);
+    `<span class="pill ${st(x.drinks, x.drinkMax, x.drinks > x.drinkMax)}"><b>${x.drinks}</b><i>/${x.drinkMax}</i><u class="dot o"></u></span>`;
+  const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.d === S.date && r.m === m));
+  $("meter").style.gridTemplateColumns = `auto repeat(${S.rests.length}, minmax(0, 1fr))`;
+  $("meter").innerHTML = `<span></span>${S.rests.map((x) => `<span class="mh${x.id === S.rest ? " cur" : ""}">${esc(x.name)}</span>`).join("")}` + meals.map((m) =>
+    `<b class="ml${m === S.meal ? " cur" : ""}">${MEALS[m]}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
+      const np = portionsOf(kk);
+      return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}">${pillOf(bb)}${np > 1 ? `<em>+${np - 1}</em>` : ""}</button>`; }).join("")).join("");
+  $("plabel").innerHTML = `<b>${MEALS[S.meal] || ""} · ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")}</b>${worthHtml(items, sel)}`;
 
   const notes = [];
   if (b.coins > b.cap) notes.push(`${b.cap}코인 초과`);
@@ -1551,6 +1561,7 @@ function onTap(e) {
   }
   if (b.dataset.clear) { unGotAll(b.dataset.clear); delete S.picks[b.dataset.clear]; save(); render(); return; }
   if (b.dataset.del != null) { const p = S.picks[k]; unGot(k, b.dataset.del); if (p?.items) { delete p.items[b.dataset.del]; p.sent = false; } save(); render(); return; }
+  if (b.dataset.slot) { const [m2, r2] = b.dataset.slot.split("|"); if (m2 === S.meal && r2 === S.rest) { goTab("cart"); return; } S.meal = m2; S.rest = r2; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
   if (b.dataset.rest) { S.rest = b.dataset.rest; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); return; }
   if (b.dataset.date) { S.date = b.dataset.date; S.cat = null; render(); scrollTo(0, 0); return; }
   if (b.dataset.meal) { S.meal = b.dataset.meal; S.cat = null; render(); scrollTo(0, 0); return; }

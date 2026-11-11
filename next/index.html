@@ -343,6 +343,12 @@ i.sv { background: var(--viz-save); } i.pd { background: var(--viz-paid); }
 .colb { width: 100%; max-width: 14px; display: flex; flex-direction: column; gap: 2px; }
 .colb i:first-child { border-radius: 4px 4px 0 0; }
 .col.on[aria-pressed="false"] .colb { opacity: .5; }
+.mdots { display: flex; gap: 2px; padding-top: 5px; min-height: 12px; }
+.mdots span { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: .5; }
+.mdots span.cur { opacity: 1; }
+.mdots i, .lg i.ml2 { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); }
+.lg i.ml2 { width: 6px; height: 6px; }
+.sheet .rep .dlg { margin-top: 10px; padding: 0 4px; }
 .ticks { display: flex; gap: 2px; margin-top: 4px; }
 .ticks span { flex: 1; min-width: 0; text-align: center; font-size: 9px; color: var(--muted); white-space: nowrap; overflow: visible; }
 .dsel { margin: 12px 4px 0; font-size: 12px; color: var(--muted); }
@@ -1200,7 +1206,11 @@ function dailyHtml(ym, days) {
     const h = Math.max(6, Math.round(x.worth / max * 100)), pd = Math.min(x.paid, x.worth), sv = x.worth - pd;
     return `<button class="col on" data-rday="${d}" aria-pressed="${d === S.repDay}" aria-label="${i + 1}일 실질 가치 ${wonN(x.worth)}, 지출 ${wonN(x.paid)}"><span class="colb" style="height:${h}%">${sv ? `<i class="sv" style="flex:${sv}"></i>` : ""}${pd ? `<i class="pd" style="flex:${pd}"></i>` : ""}</span></button>`; }).join("");
   const ticks = Array.from({ length: n }, (_, i) => `<span>${i === 0 || (i + 1) % 5 === 0 ? i + 1 : ""}</span>`).join("");
-  return `<p class="gh">날짜별</p><section class="daily"><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="ticks">${ticks}</div>
+  // 끼 수: 같은 날짜 축 아래에 점으로(한 점 = 한 끼). 금액과 단위가 달라 축을 따로 둔다.
+  const dots = Array.from({ length: n }, (_, i) => { const d = ym + String(i + 1).padStart(2, "0"), x = days[d];
+    return `<span class="${d === S.repDay ? "cur" : ""}">${x ? "<i></i>".repeat(Math.min(x.meals, 8)) : ""}</span>`; }).join("");
+  return `<p class="gh">날짜별</p><section class="daily"><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="mdots" aria-hidden="true">${dots}</div><div class="ticks">${ticks}</div>
+    <ul class="lg dlg"><li><i class="sv"></i>아낀 금액</li><li><i class="pd"></i>지출</li><li><i class="ml2"></i>끼 수(점 하나 = 한 끼)</li></ul>
     <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼</p></section>`;
 }
 const wonN = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;

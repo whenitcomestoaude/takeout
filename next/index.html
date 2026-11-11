@@ -620,6 +620,9 @@ const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" ari
 const MINUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7"/></svg>', PLUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7M6 2.500v7"/></svg>';
 const won = (it) => (it?.price ? `${it.est ? "약\u00a0" : ""}${it.price.toLocaleString("ko-KR")}\u2060원` : "");
 // 가격은 누르면 출처가 뜬다(줄 전체가 담기 버튼이라, 가격만 따로 받는다)
+// 시중가: 딸린 사이드가 있으면 그 값까지 합친다(둘 중 하나라도 추정이면 '약'). own/sidePrice 는 출처 창에서 나눠 보여 준다.
+const priceOf = (r, side) => { const own = r.pr > 0 ? r.pr : null, sp = side && side.pr > 0 ? side.pr : null;
+  return { price: own != null ? own + (sp || 0) : null, own, sidePrice: sp, est: r.ps === "est" || (sp != null && side.ps === "est") }; };
 const priceTag = (it, sub) => (it?.price ? `${sub ? '<span class="dotsep"> · </span>' : ""}<span class="pr" data-price="${esc(it.name)}">${won(it)}</span>` : "");
 // 수제 탭에서는 줄마다 '수제'를 되풀이하지 않는다
 const noHand = (t) => (S.cat === "수제" && S.q == null ? t.replace(/(^| · )수제(?= · |$)/, "").replace(/^ · /, "") : t);
@@ -640,8 +643,8 @@ function itemsFor(d, m, rid = S.rest) {
   // "○○(반줄 사이드)" 는 따로 고르는 메뉴가 아니라 같은 코너 묶음(ct)의 반줄(½) 김밥에 딸려 나오는 것 — 목록에서 빼고 반줄 메뉴에 붙인다
   const SIDE_OF_HALF = /\(\s*반줄\s*사이드\s*\)\s*$/, HALF = /½|1\/2|반줄|half/i;
   const mine = S.rows.filter((r) => r.d === d && r.m === m && r.r === rid);
-  const sideRows = new Set(), sideByCt = new Map();
-  for (const r of mine) if (SIDE_OF_HALF.test(r.n) && mine.some((o) => o.ct === r.ct && !SIDE_OF_HALF.test(o.n) && HALF.test(o.n))) { sideRows.add(r); sideByCt.set(r.ct, r.n.replace(SOLD, "").replace(SIDE_OF_HALF, "").trim()); }
+  const sideRows = new Set(), sideByCt = new Map(), sidePr = new Map();
+  for (const r of mine) if (SIDE_OF_HALF.test(r.n) && mine.some((o) => o.ct === r.ct && !SIDE_OF_HALF.test(o.n) && HALF.test(o.n))) { sideRows.add(r); sideByCt.set(r.ct, r.n.replace(SOLD, "").replace(SIDE_OF_HALF, "").trim()); sidePr.set(r.ct, r); }
   const seen = new Map();
   for (const rows of groups.values()) {
     const cat = /음료/.test(rows[0].c) ? "음료" : catName(rows[0].c, rows.map((r) => r.n));
@@ -651,7 +654,7 @@ function itemsFor(d, m, rid = S.rest) {
       // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
       const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
       if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
-      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, price: r.pr > 0 ? r.pr : null, est: r.ps === "est", psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, ...priceOf(r, sideName && HALF.test(r.n) ? sidePr.get(r.ct) : null), psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
     }
   }
   const list = [...seen.values()];
@@ -1487,9 +1490,9 @@ async function openPrice(name) {
   el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button><div class="panel psheet" role="dialog" aria-label="시중가"><div class="grab"></div>
     <div class="sh"><b>Market Price</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
     <p class="pname">${esc(it.name)}</p><div class="pbig">${won(it)}</div>
-    <p class="psrc">${SRC_LABEL[it.psrc] || ""}</p>
+    <p class="psrc">${SRC_LABEL[it.psrc] || ""}${it.sidePrice ? `<br>${esc(it.name)} ${it.own.toLocaleString("ko-KR")}원 + ${esc(it.withSide)} ${it.sidePrice.toLocaleString("ko-KR")}원` : ""}</p>
     ${it.plink ? `<a class="plink" href="${esc(it.plink)}" target="_blank" rel="noopener">${esc(it.ptitle || it.plink)}<small>${esc(host)} ↗</small></a>` : ""}
-    ${canEdit ? `<p class="gh">가격 고치기</p><div class="pedit"><input id="pval" inputmode="numeric" pattern="[0-9]*" value="${it.price}" aria-label="가격(원)"><button class="copy" id="psave" data-name="${esc(it.name)}">저장</button></div>` : ""}</div>`;
+    ${canEdit ? `<p class="gh">가격 고치기${it.sidePrice ? " · 사이드를 뺀 값" : ""}</p><div class="pedit"><input id="pval" inputmode="numeric" pattern="[0-9]*" value="${it.own ?? it.price}" aria-label="가격(원)"><button class="copy" id="psave" data-name="${esc(it.name)}">저장</button></div>` : ""}</div>`;
   el.hidden = false;
 }
 async function savePrice(name) {

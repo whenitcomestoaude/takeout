@@ -547,7 +547,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
   <div class="gutter">
     <div class="nums" id="nums" hidden></div><div class="meter" id="meter"></div>
     <div class="prow"><span class="plabel" id="plabel"></span>
-      <div class="pctl"><button class="half" id="half" aria-pressed="false" aria-label="2코인은 남편 몫">남편 몫</button>
+      <div class="pctl"><button class="half" id="half" aria-pressed="false" aria-label="2코인은 아침 식사">아침 식사</button>
       <div class="portions sg" id="portions" aria-label="추가취식">
         <button data-portion="1">기본</button><button data-portion="2">+1</button><button data-portion="3">+2</button>
       </div></div>
@@ -704,6 +704,9 @@ function commitDay(d) {
     }
     p.done = true;
     p.val = Object.fromEntries(items.filter((x) => x.price && p.items?.[x.name]).map((x) => [x.name, x.price])); p.paid = (portionsOf(k) - 1) * EXTRA_FEE;
+    // 아침 식사로 먹은 2코인: 무엇을 먹었는지는 모르니, 그날 그 식당 메뉴의 코인당 시중가 평균으로 값을 어림한다
+    if (S.share[k]) { const pc = items.filter((x) => x.price && x.coin > 0 && !x.drink).map((x) => x.price / x.coin);
+      p.bf = SHARE; p.bfv = pc.length ? Math.round(pc.reduce((a, v) => a + v, 0) / pc.length * SHARE / 10) * 10 : 0; delete S.share[k]; }
     // 끝난 끼니는 카트에서 빼고 기록으로만 남긴다(횟수 세기용). 같은 끼니를 다시 담으면 새로 시작한다.
     S.picks[`${k}#${Date.now().toString(36)}`] = p; delete S.picks[k];
   }
@@ -732,7 +735,7 @@ function freq() {
   return f;
 }
 const portionsOf = (k) => { const v = S.portions[k]; return v === true ? 2 : (v || 1); };
-// 남편 몫: 내 한 끼 4코인 중 2코인은 남편이 따로 집는다 — 그 칸의 한도에서 뺀다
+// 아침 식사: 한 끼 4코인 중 2코인은 그 자리에서 아침으로 먹는다 — 그 칸의 테이크아웃 한도에서 뺀다
 const SHARE = 2;
 const shareOf = (k) => (S.share[k] ? SHARE : 0);
 
@@ -1072,7 +1075,7 @@ function tile(it, q, times, hidden) {
 }
 function renderTray(items, sel, n, k) {
   const b = budget(items, sel, n, shareOf(k));
-  $("half").setAttribute("aria-pressed", String(!!S.share[k]));
+  $("half").setAttribute("aria-pressed", String(!!S.share[k])); $("half").hidden = S.meal !== "1" && !S.share[k];
   $("tray").hidden = false;
   $("tray").classList.toggle("over", b.over);
   $("nums").innerHTML = "";
@@ -1092,7 +1095,7 @@ function renderTray(items, sel, n, k) {
   $("meter").innerHTML = `<span></span>${S.rests.map((x) => `<span class="mh${x.id === S.rest ? " cur" : ""}">${esc(x.name)}</span>`).join("")}` + meals.map((m) =>
     `<b class="ml${m === S.meal ? " cur" : ""}">${MEALS[m]}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk), shareOf(kk));
       const np = portionsOf(kk);
-      return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}">${pillOf(bb)}${np > 1 || S.share[kk] ? `<em>${[np > 1 ? `+${np - 1}` : "", S.share[kk] ? "남편 몫" : ""].filter(Boolean).join(" · ")}</em>` : ""}</button>`; }).join("")).join("");
+      return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}">${pillOf(bb)}${np > 1 || S.share[kk] ? `<em>${[np > 1 ? `+${np - 1}` : "", S.share[kk] ? "아침 식사" : ""].filter(Boolean).join(" · ")}</em>` : ""}</button>`; }).join("")).join("");
   $("plabel").innerHTML = `<b>${MEALS[S.meal] || ""} · ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")}</b>${worthHtml(items, sel)}`;
 
   const notes = [];
@@ -1222,7 +1225,7 @@ function dailyHtml(ym, days) {
     return `<span class="${d === S.repDay ? "cur" : ""}">${x ? "<i></i>".repeat(Math.min(x.meals, 8)) : ""}</span>`; }).join("");
   return `<p class="gh">날짜별</p><section class="daily"><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="mdots" aria-hidden="true">${dots}</div><div class="ticks">${ticks}</div>
     <ul class="lg dlg"><li><i class="sv"></i>아낀 금액</li><li><i class="pd"></i>지출</li><li><i class="ml2"></i>취식</li></ul>
-    <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼</p></section>`;
+    <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼${sel.bf ? ` · 아침 식사 ${sel.bf}회` : ""}</p></section>`;
 }
 const wonN = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
 function renderReport(el) {
@@ -1231,6 +1234,7 @@ function renderReport(el) {
     if (!p.done || !p.val) continue;
     const ym = k.split("|")[1].slice(0, 6), mth = (months[ym] ||= { worth: 0, paid: 0, meals: 0, por: {} });
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) mth.worth += p.val[nm] * (p.items?.[nm] || 1);
+    if (p.bf) { mth.worth += p.bfv || 0; mth.bf = (mth.bf || 0) + 1; }
     // 낸 돈은 끼니 단위로 센다: 한 끼에 가져온 인분(식당이 둘이면 둘을 더함)에서 1인분을 뺀 만큼이 추가취식
     const dm = k.split("|")[1].split("#")[0];
     mth.por[dm] = (mth.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
@@ -1242,6 +1246,7 @@ function renderReport(el) {
     if (!p.done || !p.val) continue;
     const dm = k.split("|")[1].split("#")[0], d = dm.slice(0, 8), x = (days[d] ||= { worth: 0, por: {} });
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok" && p.val[nm]) x.worth += p.val[nm] * (p.items?.[nm] || 1);
+    if (p.bf) { x.worth += p.bfv || 0; x.bf = (x.bf || 0) + 1; }
     x.por[dm] = (x.por[dm] || 0) + 1 + Math.round((p.paid || 0) / EXTRA_FEE);
   }
   for (const x of Object.values(days)) { x.meals = Object.values(x.por).reduce((a, n) => a + n, 0); x.paid = Object.values(x.por).reduce((a, n) => a + (n - 1) * EXTRA_FEE, 0); }
@@ -1249,6 +1254,7 @@ function renderReport(el) {
   const keys = Object.keys(months).sort().reverse(), tabs = [...new Set([now, ...keys])].sort().reverse().slice(0, 4);
   if (!tabs.includes(S.repMonth)) S.repMonth = now;
   const cur = S.repMonth, m0 = months[cur] || { worth: 0, paid: 0, meals: 0 };
+  const bfTxt = (x) => (x.bf ? ` · 아침 식사 ${x.bf}회` : "");
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const max = Math.max(1, ...keys.map((ym) => months[ym].worth - months[ym].paid));
   const total = keys.reduce((a, ym) => a + months[ym].worth - months[ym].paid, 0);
@@ -1258,18 +1264,19 @@ function renderReport(el) {
     if (!p.done || k.split("|")[1].slice(0, 6) !== cur) continue;
     const [r, dm] = k.split("|"), d = dm.slice(0, 8), m = dm.slice(9, 10), rn = S.rests.find((x) => x.id === r)?.name || "";
     for (const [nm, st] of Object.entries(p.got || {})) if (st === "ok") got.push({ nm, d, m, rn, q: p.items?.[nm] || 1, v: p.val?.[nm] || 0 });
+    if (p.bf) got.push({ nm: `아침 식사 ${p.bf}코인`, bf: true, d, m, rn, q: 1, v: p.bfv || 0 });
   }
   got.sort((a, b) => b.d.localeCompare(a.d) || a.m.localeCompare(b.m));
   $("althead").innerHTML = `<div class="when"><div class="week">${tabs.map((ym) => `<button class="day" data-rmonth="${ym}" aria-pressed="${ym === cur}"><span class="dn">${+ym.slice(4)}</span><span class="wl">${MON[+ym.slice(4) - 1]}</span></button>`).join("")}</div>
     <div class="sum">${keys.length ? `지금까지 <b>약 ${wonN(total)}</b>` : ""}</div></div>`;
   el.innerHTML = `<div class="panel rep">
     <div class="rep-hero"><small>${+cur.slice(4)}월에 아낀 금액</small><b>${m0.meals ? `약 ${wonN(m0.worth - m0.paid)}` : "–"}</b>
-      <span>${m0.meals ? `${m0.meals}끼${m0.paid ? ` · 지출의 ${(m0.worth / m0.paid).toFixed(1)}배 가치` : " · 지출 없음"}` : "테이크아웃한 식사가 없습니다."}</span></div>
+      <span>${m0.meals ? `${m0.meals}끼${bfTxt(m0)}${m0.paid ? ` · 지출의 ${(m0.worth / m0.paid).toFixed(1)}배 가치` : " · 지출 없음"}` : "테이크아웃한 식사가 없습니다."}</span></div>
     ${m0.meals ? cmpHtml(m0) + dailyHtml(cur, days) : ""}
     ${keys.length > 1 ? `<p class="gh">월별</p><ul class="rows">${keys.map((ym) => { const x = months[ym], mx = Math.max(1, ...keys.map((y) => months[y].worth));
-      return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
-    ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? wonN(g.v * g.q) : "–"}</span></li>`).join("")}</ul>` : ""}
-    ${keys.length || got.length ? `<p class="none">시중가는 AI 검색 결과로 추정치입니다.</p>` : ""}</div>`;
+      return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼${bfTxt(x)}</em></span></li>`; }).join("")}</ul>` : ""}
+    ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? `${g.bf ? "약 " : ""}${wonN(g.v * g.q)}` : "–"}</span></li>`).join("")}</ul>` : ""}
+    ${keys.length || got.length ? `<p class="none">시중가는 AI 검색 결과로 추정치입니다.${keys.some((ym) => months[ym].bf) ? " 아침 식사는 그날 메뉴의 코인당 평균 시중가로 어림했습니다." : ""}</p>` : ""}</div>`;
   el.hidden = false;
 }
 function renderSheet() {
@@ -1282,7 +1289,7 @@ function renderSheet() {
   for (const m of Object.keys(MEALS)) pickedRests(S.date, m).forEach((x, ri, arr) => {
     const k = keyOf(S.date, m, x.id), s = S.picks[k]?.items || {};
     const by = Object.fromEntries(itemsFor(S.date, m, x.id).map((it) => [it.name, it]));
-    const extra = (portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "") + (S.share[k] ? `<i>남편 몫 ${SHARE}코인</i>` : "");
+    const extra = (portionsOf(k) > 1 ? `<i>+${portionsOf(k) - 1}</i>` : "") + (S.share[k] ? `<i>아침 식사 ${SHARE}코인</i>` : "");
     // 한 끼니에 두 곳을 담았으면 둘 중 하나라는 뜻 — 순위를 눌러 바꾼다
     const md = modeOf(S.date, m), mk = `${S.date}-${m}`;
     const rk = arr.length > 1 && md === "rank" ? `<button class="rk${ri === 0 ? " first" : ""}" data-rank="${mk}" data-rid="${x.id}">${ri + 1}순위</button>` : "";
@@ -1342,7 +1349,7 @@ function message(d) {
     const lines = [`${m === "1" ? "🌅" : "🌙"} ${dateLabel(d)} ${MEALS[m]} · ${x.name}${rk}${n > 1 ? `  ➕ 추가취식 ${n - 1}회` : ""}`];
     for (const c of [...sections.keys()].sort((a, b2) => rank(a) - rank(b2))) lines.push(`[${c}] ${sections.get(c).join(" / ")}`);
     if (drink.length) lines.push(`🥤 ${drink.join(" / ")}`);
-    if (S.share[k]) lines.push(`🙋 남편 몫 ${SHARE}코인은 따로 골라 와요`);
+    if (S.share[k]) lines.push(`🍳 아침 식사 ${SHARE}코인은 따로`);
     out.push(lines.join("\n"));
   }
   return out.join("\n\n");

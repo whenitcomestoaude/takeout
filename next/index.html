@@ -705,6 +705,16 @@ body:not(.tab-menu) .band .util { display: none; }
 .sheet h3 .ate { font-size: 13px; font-weight: 400; padding: 5px 12px; }
 .clr { font-size: 13px; }
  /* 좁은 화면: 트레이에서 숫자가 잘리지 않게 */
+
+/* 원을 키운다: 코인·음료 10px. 추가취식이면 줄이 쌓이며 칸이 위아래로 자란다 */
+.pill { gap: 4px; }
+.pill u { width: 10px; height: 10px; box-shadow: inset 0 0 0 1.4px var(--muted); }
+.pill u.on, .pill u.x, .pill u.ov { box-shadow: none; }
+.pill + .pill { margin-left: 8px; padding-left: 10px; }
+.pill.o u.on, .mc.cur .pill.o u.on { background: radial-gradient(circle, currentColor 0 2.3px, transparent 2.8px); box-shadow: inset 0 0 0 1.5px currentColor; }
+.dls { gap: 7px; }
+.mc { padding: 8px 12px; }
+.mc .mn { width: 20px; flex: none; }
 </style>
 
 <div class="top">

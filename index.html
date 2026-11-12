@@ -520,7 +520,7 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .fbar { position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom, 0px)); margin: 20px -16px 0; padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--page); border-top: .5px solid var(--line); display: grid; gap: 8px; }
 .fbar .copy { width: 100%; }
 .fbar p { margin: 0; text-align: center; font-size: 11px; color: var(--muted); }
-.sheet .memo { width: 100%; margin-top: 0; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 14px var(--sans); }
+.sheet .memo { display: block; resize: none; overflow: hidden; min-height: 44px; line-height: 1.45; width: 100%; margin-top: 0; padding: 12px 14px; border: 0; border-radius: 12px; background: var(--well); color: var(--ink); font: 400 14px var(--sans); }
 .sheet .memo::placeholder { color: var(--muted); }
 .sheet .rk { margin-left: 8px; padding: 3px 9px; border-radius: 999px; background: var(--well); color: var(--muted); font-size: 11px; font-weight: 600; }
 .sheet .rk.first { background: var(--btn); color: var(--btn-ink); }
@@ -715,6 +715,9 @@ body:not(.tab-menu) .band .util { display: none; }
 .dls { gap: 7px; }
 .mc { padding: 8px 12px; }
 .mc .mn { width: 20px; flex: none; }
+
+/* NEW: 처음 나온 메뉴 표시 */
+.nw { display: inline-block; font-style: normal; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; color: var(--heart); margin-right: 5px; vertical-align: 1px; }
 </style>
 
 <div class="top">
@@ -834,7 +837,10 @@ const priceTag = (it, sub) => (it?.price ? `${sub ? '<span class="dotsep"> · </
 // 수제 탭에서는 줄마다 '수제'를 되풀이하지 않는다
 const noHand = (t) => (S.cat === "수제" && S.q == null ? t.replace(/(^| · )수제(?= · |$)/, "").replace(/^ · /, "") : t);
 const SOLD = /^[*\s\[(]*품절[\])\s:·-]*/;
-const soldChip = (it) => (it?.sold ? '<i class="sold">품절</i>' : "");
+const soldChip = (it) => (it?.sold ? '<i class="sold">품절</i>' : "") + (S.tab === "menu" && S.cat !== "NEW" && isNew(it) ? '<i class="nw">NEW</i>' : "");
+// 처음 나온 지 7일 안(오늘 포함)이면 새 메뉴. 기록에 없으면(방금 들어온 메뉴) 새 메뉴로 본다
+const isNew = (it) => { if (!it || it.drink === undefined || (it.coin == null && !it.drink)) return false; // 소스 같은 곁들임은 빼고 if (!it.fs) return true;
+  const t = todayYmd(), d = new Date(Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8)) - 6 * 864e5).toISOString().slice(0, 10).replace(/-/g, ""); return it.fs >= d; };
 const cache = new Map();
 function itemsFor(d, m, rid = S.rest) {
   const k = keyOf(d, m, rid);
@@ -861,7 +867,7 @@ function itemsFor(d, m, rid = S.rest) {
       // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
       const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
       if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
-      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, ...priceOf(r, sideName && HALF.test(r.n) ? sidePr.get(r.ct) : null), psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, shelf: rid === "REST000007" && r.sh && r.sh !== "음료" && r.sh !== "냉동" ? r.sh : null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, ...priceOf(r, sideName && HALF.test(r.n) ? sidePr.get(r.ct) : null), psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, fs: r.fs || null, shelf: rid === "REST000007" && r.sh && r.sh !== "음료" && r.sh !== "냉동" ? r.sh : null, tag: /DELI|SIDE|Pick/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
     }
   }
   const list = [...seen.values()];
@@ -1111,6 +1117,8 @@ function render() {
   S.combos = S.edit ? [] : combos(all.filter((it) => !isHidden(it)), f, n);
   const hand = items.filter((it) => it.hand);
   if (hand.length) cats.set("수제", hand);
+  const fresh = items.filter(isNew).sort((a, b) => rank(a.cat) - rank(b.cat));
+  if (fresh.length) cats.set("NEW", fresh); // 여태 안 나왔던 메뉴(맛만 달라도)
   const byCat = new Map();
   for (const it of items) { if (!byCat.has(it.cat)) byCat.set(it.cat, []); byCat.get(it.cat).push(it); }
   [...byCat.keys()].sort((a, b) => rank(a) - rank(b)).forEach((c) => cats.set(c, byCat.get(c).sort((x, y) => (x.coin ?? 9) - (y.coin ?? 9))));
@@ -1172,7 +1180,7 @@ function groupsOf(list, f) {
 function gridBody(list, sel, f, isHidden) {
   const draw = (l) => l.map((it) => tile(it, sel[it.name] || 0, f[it.name] || 0, isHidden(it))).join("");
   if (S.edit) return draw(list);
-  const plain = S.cat !== "수제" && S.q == null;
+  const plain = !["수제", "NEW"].includes(S.cat) && S.q == null;
   return groupsOf(list, f).map(([t, l]) => { const cm = commonOf(l, plain); S.cm = cm; const h = `${ghHtml(t, cm)}${draw(l)}`; S.cm = null; return h; }).join("");
 }
 // 목록 한 줄: 체크 원 · 이름 + 보조 줄(코인 · 분류 · kcal) · 수량 · 하트
@@ -1204,7 +1212,7 @@ function commonOf(l, plain) {
 const cmText = (cm) => [cm.label, cm.tag ? cm.tag.toUpperCase() : "", cm.coin ? `${cm.coin}코인` : ""].filter(Boolean).join(" · ");
 const ghHtml = (title, cm) => { const t = [title, cmText(cm)].filter(Boolean); return t.length ? `<p class="gh">${t.map((x, i) => i ? `<span class="ghc">${esc(x)}</span>` : esc(x)).join("")}</p>` : ""; };
 function listBody(list, sel, f) {
-  const plain = S.cat !== "수제" && S.q == null;
+  const plain = !["수제", "NEW"].includes(S.cat) && S.q == null;
   const group = (title, l) => { if (!l.length) return ""; const cm = commonOf(l, plain); S.cm = cm;
     const h = `${ghHtml(title, cm)}<ul class="rows">${l.map((it) => rowHtml(it, sel[it.name] || 0, plain)).join("")}</ul>`; S.cm = null; return h; };
   return groupsOf(list, f).map(([t, l]) => group(t, l)).join("");
@@ -1281,7 +1289,7 @@ function tile(it, q, times, hidden) {
   // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
   const cm = S.cm || {};
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", cm.label ? "" : labelOf(it, S.cat !== "수제" && S.q == null), noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", cm.label ? "" : labelOf(it, !["수제", "NEW"].includes(S.cat) && S.q == null), noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
@@ -1550,7 +1558,7 @@ function renderSheet() {
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : kindChip(it) || `<span class="coin">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
-        const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm) + (it?.shelf ? `<i class="tg">${esc(it.shelf)}</i>` : "") + (it?.withSide ? `<i class="tg">+ ${esc(it.withSide)}</i>` : "") + (it?.cat === "냉동" ? '<i class="tg fz">Frozen</i>' : "") + (it?.drink ? '<i class="tg">음료</i>' : "");
+        const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm) + (it?.shelf || (it?.hand && !it?.tag) ? `<i class="tg">${esc(it.shelf || "수제")}</i>` : "") + (it?.withSide ? `<i class="tg">+ ${esc(it.withSide)}</i>` : "") + (it?.cat === "냉동" ? '<i class="tg fz">Frozen</i>' : "") + (it?.drink ? '<i class="tg">음료</i>' : "");
         const side = isSide(it), g = got[name], ke = esc(k);
         const lead = side ? `<span class="gsp"></span>`
           : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
@@ -1562,10 +1570,11 @@ function renderSheet() {
       }).join("") + "</ul>";
   });
   const pend = pendingKeys(S.date).length;
-  if (body) body = `<p class="gh">전달사항</p><input class="memo" id="memo" maxlength="60" value="${esc(S.memo[S.date] || "")}">` + body
+  if (body) body = `<p class="gh">전달사항</p><textarea class="memo" id="memo" rows="1" maxlength="300" enterkeyhint="enter">${esc(S.memo[S.date] || "")}</textarea>` + body
     + `<div class="fbar"><span class="shwrap"><button class="copy shico" id="share" aria-haspopup="true" aria-label="공유"><svg viewBox="0 0 16 18"><path d="M8 11V1.500M4.500 4.500 8 1l3.500 3.500M3.500 8H2.800A1.300 1.300 0 0 0 1.500 9.300v6.400A1.300 1.300 0 0 0 2.800 17h10.400a1.300 1.300 0 0 0 1.300-1.300V9.300A1.300 1.300 0 0 0 13.200 8h-.700"/></svg></button><span class="shmenu" id="shmenu" hidden><button id="copy">텍스트로 복사</button><button id="shareimg">이미지로 공유</button></span></span><button class="copy" id="takedone"${pend ? "" : " disabled"}>테이크아웃 완료</button><p>테이크아웃 완료한 메뉴는 STOCK에서 관리할 수 있습니다.</p></div>`;
   const open = el.querySelector("#shmenu") && !el.querySelector("#shmenu").hidden;
   el.innerHTML = `<div class="panel">${body || `<p class="none">이 날짜에 담은 메뉴가 없습니다.</p>`}</div>`;
+  requestAnimationFrame(() => growMemo($("memo")));
   el.hidden = false;
   if (open && $("shmenu")) $("shmenu").hidden = false;
 }
@@ -1632,7 +1641,8 @@ function drawCard(d) {
   const INK = "#1D1B14", MUTED = "rgba(29,27,20,.5)", LINE = "rgba(29,27,20,.1)", OLIVE = "#5B5121", ORANGE = "#ED6328", MUSTARD = "#BFA732", SOFT = "#F0E9C8";
   const cv = document.createElement("canvas"), cx = cv.getContext("2d");
   const font = (w, px) => { cx.font = `${w} ${px}px ${FONT}`; };
-  const wrap = (text, max) => { // 띄어쓰기에서 먼저 끊고, 한 낱말이 너무 길 때만 글자 단위로
+  const wrap = (text, max) => text.split(/\n/).flatMap((t) => (t.trim() ? wrap1(t, max) : [""])); // 줄바꿈은 그대로
+  const wrap1 = (text, max) => { // 띄어쓰기에서 먼저 끊고, 한 낱말이 너무 길 때만 글자 단위로
     const lines = []; let cur = "";
     for (const word of text.split(/(?<= )/)) {
       if (!cur || cx.measureText((cur + word).trimEnd()).width <= max) { cur += word; }
@@ -1754,6 +1764,8 @@ function handle(e) {
 }
 // click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
 document.addEventListener("click", (e) => handle(e), true);
+// 전달사항: 줄바꿈 가능, 쓰는 만큼 칸이 자란다
+const growMemo = (el) => { if (!el) return; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; };
 { let lastY = scrollY;
   addEventListener("scroll", () => { const y = scrollY, h = document.documentElement;
     if (y < 80 || y < lastY - 6) h.classList.remove("tray-off"); else if (y > lastY + 6) h.classList.add("tray-off");
@@ -1761,7 +1773,7 @@ document.addEventListener("click", (e) => handle(e), true);
 // 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
 document.addEventListener("input", (e) => {
   if (e.target.id === "q") { S.q = e.target.value; const lb = $("lbody"); if (lb) lb.innerHTML = S.find(S.q); return; }
-  if (e.target.id === "memo") { S.memo[S.date] = e.target.value; save(); }
+  if (e.target.id === "memo") { S.memo[S.date] = e.target.value; growMemo(e.target); save(); }
   if (e.target.classList?.contains("swapin")) { // 바꾼 메뉴 이름 — 재고에도 그 이름으로 올린다
     const k = e.target.dataset.k, n = e.target.dataset.n, p = S.picks[k]; if (!p) return;
     (p.swapTo || (p.swapTo = {}))[n] = e.target.value;

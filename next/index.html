@@ -637,9 +637,12 @@ body:not(.tab-menu) .band .util { display: none; }
 .ml { display: grid; place-items: center; padding-right: 4px; opacity: .45; }
 .ml.cur { opacity: 1; }
 .wx { width: 20px; height: 20px; display: block; }
-.wx.sun { fill: #F5B800; stroke: #F5B800; stroke-width: 1.7; stroke-linecap: round; }
-.wx.moon { fill: #9AA3B5; }
-.wx.moon .st { fill: #9AA3B5; }
+.wx { color: var(--ink); }
+.wx.sun { fill: currentColor; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.wx.moon, .wx.moon .st { fill: currentColor; }
+.ml { opacity: 1; color: var(--muted); }
+.ml .wx { color: inherit; opacity: .5; }
+.ml.cur .wx { color: var(--ink); opacity: 1; }
 /* 음료는 고리(◉) — 코인(●)과 모양으로 구분 */
 .pill.o u.on, .mc.cur .pill.o u.on { color: var(--ink); background: radial-gradient(circle, currentColor 0 1.6px, transparent 2.1px); box-shadow: inset 0 0 0 1.3px currentColor; }
 .mc.cur .pill.o u.on { color: var(--btn); }
@@ -805,6 +808,8 @@ const shelfOf = (it) => (it?.shelf && it.shelf !== it.cat && it.shelf !== S.cat 
 const kindChip = (it) => { const t = (it.tag || "").toUpperCase(); if (!t) return ""; const c = /PICK/.test(t) ? "pk" : t === "DELI" ? "dl" : "sd"; return `<i class="kd ${c}">${esc(t)}</i>`; };
 const lead2 = (it, dots) => kindChip(it) || (dots ? `<span class="coin">${dots}</span>` : "");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
+// 트레이에서 쓰는 짧은 식당 이름
+const SHORT = { REST000007: "R5", CAF04: "FH" };
 // 아침·저녁: 날씨 앱처럼 해와 달
 const SUN = '<svg class="wx sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="4"/><path d="M10 1.8v2.3M10 15.9v2.3M1.8 10h2.3M15.9 10h2.3M4.2 4.2l1.6 1.6M14.2 14.2l1.6 1.6M4.2 15.8l1.6-1.6M14.2 5.8l1.6-1.6"/></svg>';
 const MOON = '<svg class="wx moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.6 12.6A6.6 6.6 0 0 1 7.4 4.4a6.6 6.6 0 1 0 8.2 8.2z"/><path class="st" d="M14.2 3.2l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05-1.05-.45 1.05-.45z"/></svg>';
@@ -1309,7 +1314,7 @@ function renderTray(items, sel, n, k) {
   $("meter").innerHTML = meals.map((m) =>
     `<b class="ml${m === S.meal ? " cur" : ""}" aria-label="${MEALS[m]}">${m === "1" ? SUN : MOON}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
       const np = portionsOf(kk);
-      return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}"><span class="mn">${esc(x.name)}</span>${pillOf(bb, np)}</button>`; }).join("")).join("");
+      return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}"><span class="mn">${esc(SHORT[x.id] || x.name)}</span>${pillOf(bb, np)}</button>`; }).join("")).join("");
   $("plabel").innerHTML = worthHtml(items, sel); // 끼니·식당은 미터의 진한 칸이 이미 말해 준다
 
   const notes = [];

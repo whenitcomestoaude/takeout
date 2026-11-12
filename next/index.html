@@ -615,67 +615,62 @@ body { font-weight: 400; }
 :root { --coin: var(--ink); }
 /* 머리: 탭 이름 줄은 MENU 에만 (갱신 시각이 의미 있는 곳) */
 body:not(.tab-menu) .band .util { display: none; }
-.day .wl { font-size: 15px; }
 .day[aria-pressed="true"] .dn { font-size: 34px; font-weight: 600; }
 .day[aria-pressed="true"] .wl { font-size: 20px; font-weight: 400; color: var(--muted); }
-.althead .sum { font-size: 13px; }
-.rtabs button, body.tab-menu .rtabs button { font-size: 15px; }
-#stamp { font-size: 13px; }
-.sg button { font-size: 13px; }
-.rail button[data-cat], .althead .rs button { font-size: 13px; }
-.rail button .n, .althead .rs button .n { font-size: 11px; font-weight: 600; }
-/* 이름과 보조 줄 */
-.rname, .tile .name, .sheet .sname { font-size: 15px; line-height: 1.35; }
-.rsub, .ssub { font-size: 13px; line-height: 1.3; }
-.rt { gap: 4px; }
-.gh, .sheet .gh, .stockp .gh, .sheet h3 { font-size: 13px; color: var(--muted); font-weight: 400; }
+.gh, .sheet .gh, .stockp .gh, .sheet h3 { color: var(--muted); font-weight: 400; }
 .sheet h3 > span { color: var(--ink); font-weight: 600; }
 .ghc::before { content: " · "; }
-.vnote, .hint, .note, .sheet .none, .fbar p { font-size: 13px; }
-/* 가격: 밑줄 없이, 목록에서는 오른쪽 열로 */
+/* 가격: 밑줄 없이 보조 줄 끝에. 목록 오른쪽 열은 코인(또는 DELI·SIDE 칩)과 분류 */
 .pr { text-decoration: none; }
-.radd .rpr { flex: none; margin-left: auto; align-self: center; padding: 8px 0 8px 8px; font-size: 15px; font-variant-numeric: tabular-nums; pointer-events: auto; white-space: nowrap; }
+.pr .est { font-size: .9em; }
 .radd { align-items: center; }
 .radd .lead { align-self: center; margin-top: 0; }
-.rows li { grid-template-columns: minmax(0, 1fr) auto 36px; }
-.rows li.on .rpr { display: none; }
-.rpr { color: var(--ink); }
-.pr .est { font-size: .85em; color: var(--muted); }
-.stockp .gh.hurry { color: var(--warn); font-weight: 600; }
-.tile .rsub .dotsep { display: none; }
-.tile .rsub .pr { display: block; margin-top: 2px; color: var(--ink); }
-.tile .rsub { font-size: 13px; flex-direction: column; align-items: flex-start; gap: 4px; }
+.radd .rk { flex: none; margin-left: auto; display: grid; justify-items: end; gap: 5px; padding-left: 8px; text-align: right; }
+.radd .rk .coin { min-height: 0; }
+.radd .rk small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.rows li.on .rk small { display: none; }
+.pill.o { margin-left: auto; }
+/* 음료는 고리(◉) — 코인(●)과 모양으로 구분 */
+.pill.o u.on, .mc.cur .pill.o u.on { color: var(--ink); background: radial-gradient(circle, currentColor 0 1.6px, transparent 2.1px); box-shadow: inset 0 0 0 1.3px currentColor; }
+.mc.cur .pill.o u.on { color: var(--btn); }
 .rows li { grid-template-columns: minmax(0, 1fr) auto 32px; }
 .rstar { width: 32px; }
+.stockp .gh.hurry { color: var(--warn); font-weight: 600; }
+.tile .rsub .dotsep { display: none; }
+.tile .rsub .pr { display: block; margin-top: 2px; }
+.tile .rsub { flex-direction: column; align-items: flex-start; gap: 4px; }
 /* 하트: 누른 것만 보인다 (자리는 그대로, 누르면 켜진다) */
 .rstar[aria-pressed="false"] .hrt, .star[aria-pressed="false"] .hrt { opacity: 0; }
 /* 칩 두 가지: 구분(채운 회색) · 상태(윤곽). Pick 만 노랑 */
-.kd, .tg, .sold, .xq { font-size: 11px; font-weight: 600; letter-spacing: .02em; line-height: 18px; padding: 0 7px; border-radius: 999px; }
-.kd.dl, .kd.sd, .tg, .tg.fz { background: var(--well); color: var(--ink); box-shadow: none; }
+.kd, .tg, .sold, .xq { font-size: 10px; font-weight: 600; letter-spacing: .03em; line-height: 16px; padding: 0 6px; border-radius: 999px; }
+.kd.sd, .tg, .tg.fz { background: var(--well); color: var(--ink); box-shadow: none; }
+.kd.dl { background: var(--btn); color: var(--btn-ink); }
 .kd.pk { background: var(--coin-pick); color: #fff; }
 .sold { background: none; box-shadow: inset 0 0 0 1px var(--muted); color: var(--muted); }
 .xq { background: none; color: var(--muted); padding: 0 2px; }
 .coin i { width: 7px; height: 7px; }
 /* 트레이: 값 15/600, 이름표 13/400, 보조 11/600 — 세 가지만 */
 .meter { gap: 2px 6px !important; }
-.ml { font-size: 13px; }
+.ml { font-size: 12px; }
 .mc { gap: 10px; padding: 6px 10px; align-items: center; opacity: .5; }
-.mc .mn { font-size: 11px; font-weight: 600; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.mc .mn { font-size: 10px; font-weight: 600; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
 .mc.cur .mn { color: var(--ink); }
 .mc > em { font-size: 11px; }
-.pill { gap: 0; font-size: 15px; align-items: center; }
-.pill b { font-size: 15px; font-weight: 600; }
-.pill i { font-size: 15px; font-weight: 400; color: var(--muted); margin: 0 !important; }
-.pill .dot { margin-right: 5px; width: 6px; height: 6px; opacity: 1; color: var(--muted); }
-.pill.full b, .pill.full { color: var(--ink); }
-.pill.full .dot { color: var(--ink); }
-.plabel { font-size: 13px; line-height: 17px; }
+.pill { gap: 3px; align-items: center; }
+.pill u { width: 7px; height: 7px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1.2px var(--muted); text-decoration: none; }
+.pill u.on { background: var(--ink); box-shadow: none; }
+.pill.o u { border-radius: 50%; }
+.pill u.x { background: var(--coin-pick); box-shadow: none; }
+.pill u.ov { background: var(--warn); box-shadow: none; }
+.pill + .pill { margin-left: 6px; padding-left: 8px; box-shadow: inset .5px 0 0 var(--line); }
+.mc.cur .pill u.on { background: var(--btn); }
+.plabel { font-size: 12px; line-height: 16px; }
 .plabel b { font-weight: 600; }
-.worth { font-size: 13px; }
-.worth b { font-size: 11px; }
-.half { padding: 6px 12px; font-size: 13px; box-shadow: none; background: var(--well); color: var(--muted); }
+.worth { font-size: 11px; }
+.worth b { font-size: 10px; }
+.half { padding: 6px 11px; font-size: 12px; box-shadow: none; background: var(--well); color: var(--muted); }
 .half[aria-pressed="true"] { box-shadow: none; background: var(--btn); color: var(--btn-ink); font-weight: 600; }
-.portions button { font-size: 13px; }
+.portions button { font-size: 12px; }
 /* 내비 */
 .nav button { font-size: 10px; letter-spacing: .06em; }
 /* RATINGS: 할 일(별점 남기기)은 진하게, 끝난 것은 흐리게 */
@@ -1153,12 +1148,12 @@ function rowHtml(it, q, plain) {
   const nm = esc(it.name);
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
   const cm = S.cm || {};
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", cm.label ? "" : labelOf(it, plain), noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
-  const blk = S.blocked?.(it), lead = cm.tag || cm.coin ? "" : lead2(it, dots);
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const blk = S.blocked?.(it), label = labelOf(it, false), lead = lead2(it, dots);
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span>${lead || sub ? `<span class="rsub">${lead}<span class="st">${esc(sub)}</span></span>` : ""}</span>${photoBtn(it)}${it.price ? `<span class="rpr pr" data-price="${esc(it.name)}">${won(it)}</span>` : ""}
+      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span>${sub || it.price ? `<span class="rsub"><span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span>` : ""}</span>${photoBtn(it)}${lead || label ? `<span class="rk">${lead}${label ? `<small>${esc(label)}</small>` : ""}</span>` : ""}
     </button>
     <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">${PLUS}</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
@@ -1167,6 +1162,7 @@ function rowHtml(it, q, plain) {
 // 묶음 안 모든 메뉴가 같은 값(분류·코인·구분)이면 머리글에 한 번만 쓰고 줄에서는 뺀다 (3개 이상일 때만)
 const labelOf = (it, plain) => shelfOf(it) || (plain ? "" : it.cat);
 function commonOf(l, plain) {
+  return {}; // 코인·분류는 줄마다 오른쪽 열에 보인다 (머리글로 올리지 않음)
   if (l.length < 3) return {};
   const same = (fn) => { const v = fn(l[0]); return l.every((x) => fn(x) === v) ? v : undefined; };
   const cm = { label: same((x) => labelOf(x, plain)) || undefined, tag: same((x) => x.tag || "") || undefined, coin: same((x) => (x.drink ? -1 : x.coin ?? -2)) };
@@ -1280,8 +1276,9 @@ function renderTray(items, sel, n, k) {
   const drinkCls = st(b.drinks, b.drinkMax, b.drinks > b.drinkMax);
   // 미터: 끼니(줄) × 식당(칸). 칸마다 따로 세고, 지금 보는 칸을 진하게 한다. 칸을 누르면 그 끼니·식당으로 간다.
   // 추가취식(기본/+1/+2)은 지금 보는 칸의 것이고, 누르는 즉시 그 칸의 한도가 늘어난다(담은 것이 없어도).
-  const pillOf = (x) => `<span class="pill ${st(x.coins, x.base, x.coins > x.cap)}"><u class="dot"></u><b>${x.coins}</b><i>/${x.base}</i></span>` +
-    `<span class="pill ${st(x.drinks, x.drinkMax, x.drinks > x.drinkMax)}"><u class="dot o"></u><b>${x.drinks}</b><i>/${x.drinkMax}</i></span>`;
+  // 코인: 한도만큼 빈 원, 쓴 만큼 채움. 5코인째(지정 음료)는 노랑, 한도를 넘으면 주황. 음료도 같은 방식
+  const dotsOf = (used, base, cap) => Array.from({ length: Math.max(base, used) }, (_, i) => `<u class="${i >= used ? "" : i < base ? "on" : i < cap ? "x" : "ov"}"></u>`).join("");
+  const pillOf = (x) => `<span class="pill" aria-hidden="true">${dotsOf(x.coins, x.base, x.cap)}</span><span class="pill o" aria-hidden="true">${dotsOf(x.drinks, x.drinkMax, x.drinkMax)}</span>`;
   const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.d === S.date && r.m === m));
   $("meter").style.gridTemplateColumns = `auto repeat(${S.rests.length}, minmax(0, 1fr))`;
   $("meter").innerHTML = meals.map((m) =>

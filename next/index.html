@@ -606,7 +606,7 @@ html.tray-off body.tab-menu::after { height: calc(96px + env(safe-area-inset-bot
 .daily.mod > .dsel { margin: 12px 16px 0; }
 .daily.mod > .dlg { margin: 10px 16px 0 !important; padding: 0 !important; }
 .rep > .none { margin-top: 16px; text-align: center; }
-@media (max-width: 420px) { .plabel .worth b { display: none; } }
+
 
 /* ===== 레이아웃 3: 글자 체계 다섯 단계, 색은 선택·실행에만 =====
    큰 제목 34/600 · 이름 15/400 · 값 15/600 · 이름표 13/400(흐림) · 보조 11/600.
@@ -668,6 +668,10 @@ body:not(.tab-menu) .band .util { display: none; }
 .plabel b { font-weight: 600; }
 .worth { font-size: 11px; }
 .worth b { font-size: 10px; }
+/* 트레이 시중가: 이름표 위, 값 아래 두 줄로 — 잘리지 않게 */
+.plabel .worth { display: grid; gap: 1px; white-space: nowrap; }
+.plabel .worth b { margin: 0; line-height: 1.2; }
+.plabel .worth { font-size: 12px; color: var(--ink); }
 .half { padding: 6px 11px; font-size: 12px; box-shadow: none; background: var(--well); color: var(--muted); }
 .half[aria-pressed="true"] { box-shadow: none; background: var(--btn); color: var(--btn-ink); font-weight: 600; }
 .portions button { font-size: 12px; }
@@ -1149,7 +1153,7 @@ function rowHtml(it, q, plain) {
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
   const cm = S.cm || {};
   const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
-  const blk = S.blocked?.(it), label = labelOf(it, false), lead = lead2(it, dots);
+  const blk = S.blocked?.(it), label = labelOf(it, plain), lead = lead2(it, dots);
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
@@ -1160,7 +1164,7 @@ function rowHtml(it, q, plain) {
   </li>`;
 }
 // 묶음 안 모든 메뉴가 같은 값(분류·코인·구분)이면 머리글에 한 번만 쓰고 줄에서는 뺀다 (3개 이상일 때만)
-const labelOf = (it, plain) => shelfOf(it) || (plain ? "" : it.cat);
+const labelOf = (it, plain) => (plain ? "" : it.cat); // 진열 구분(컵푸드 등)은 CART 에서만 보인다
 function commonOf(l, plain) {
   return {}; // 코인·분류는 줄마다 오른쪽 열에 보인다 (머리글로 올리지 않음)
   if (l.length < 3) return {};
@@ -1285,7 +1289,7 @@ function renderTray(items, sel, n, k) {
     `<b class="ml${m === S.meal ? " cur" : ""}">${MEALS[m]}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
       const np = portionsOf(kk);
       return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}"><span class="mn">${esc(x.name)}</span>${pillOf(bb)}${np > 1 ? `<em>+${np - 1}</em>` : ""}</button>`; }).join("")).join("");
-  $("plabel").innerHTML = `<b>${MEALS[S.meal] || ""} · ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")}</b>${worthHtml(items, sel)}`;
+  $("plabel").innerHTML = worthHtml(items, sel); // 끼니·식당은 미터의 진한 칸이 이미 말해 준다
 
   const notes = [];
   if (b.coins > b.cap) notes.push(`${b.cap}코인 초과`);

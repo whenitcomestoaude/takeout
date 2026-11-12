@@ -531,18 +531,202 @@ mark::before { content: "+"; color: var(--heart); font-weight: 600; margin-right
 .sheet .none { color: var(--muted); font-size: 12px; padding: 16px 0; margin: 0; }
 .clr { font-size: 12px; font-weight: 400; color: var(--gold-deep); }
 .toast { position: fixed; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 13px; z-index: 8; white-space: nowrap; }
+
+/* ===== 레이아웃 2 (Apple 날씨·캘린더 참고) =====
+   여백 16 하나로 맞추고, 카드 안 글자는 16 들여서 시작. 머리글도 그 글자선에 맞춘다.
+   간격은 8의 배수: 묶음 사이 28, 머리글→카드 8, 줄 최소 높이 52.
+   큰 제목은 스크롤과 함께 올라가고 카테고리 줄만 붙는다. 아래 트레이는 내려 읽는 동안 비켜 준다. */
+.top { position: static; border-bottom: 0; }
+.band .gutter { display: flex; flex-direction: column; gap: 12px; padding-block: 12px 12px; }
+.band .when { order: 0; min-height: 44px; }
+.band .util { order: 2; min-height: 24px; align-items: center; }
+.band .althead { display: contents; }
+.band .althead > .when { order: 1; min-height: 44px; }
+.band .althead > .rs { order: 3; margin: 0; }
+body:not(.tab-menu) .band .gutter { padding-bottom: 4px; }
+.rail { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); box-shadow: 0 .5px 0 var(--line); }
+.rail .gutter { padding-block: 8px 8px; gap: 6px; }
+.railopt { display: flex; gap: 6px; flex: none; }
+.railopt:empty { display: none; }
+.vbtn { width: 34px; height: 34px; }
+.vnote { margin: 0 16px 12px; font-size: 12px; color: var(--muted); }
+.viewopt { margin: 0 0 16px; }
+main .gutter { padding-top: 16px; }
+/* 묶음 머리글: 카드 안 글자선(16)에 맞춘다 */
+.gh, .sheet .gh, .stockp .gh { margin: 28px 16px 8px; font-size: 12px; }
+.gh:first-of-type, .sheet.page .gh:first-child, .grid > .gh:first-child { margin-top: 4px; }
+.grid > .gh { margin: 16px 16px -4px; }
+.sheet h3 { margin: 28px 0 8px; padding: 0 0 0 16px; font-size: 12px; align-items: center; min-height: 28px; }
+.sheet h3:first-of-type { margin-top: 20px; }
+/* 구분선은 글자가 시작하는 곳부터 (체크 원이 있으면 원 다음부터) */
+.rows li + li::before { left: 16px; }
+.rows:has(.lead, .gchk, .gsp) li + li::before { left: 50px; }
+.sheet .rows li.tied + li::before, .sheet .rows li + li.tied::before { display: none; }
+.rows li { min-height: 52px; }
+/* CART: × 열을 없애고(1개일 때 빼기 버튼이 휴지통) 이름 폭을 넓힌다 */
+body.tab-cart .sheet .rows li { grid-template-columns: 22px minmax(0, 1fr) auto; padding-right: 12px; }
+body.tab-cart .sheet .rows li > .rq { margin-right: 0; }
+.rq button svg path { vector-effect: non-scaling-stroke; }
+/* CART: 오른쪽 열(구분 칩·코인)을 고정 폭으로 — 날씨 10일 예보처럼 세로로 맞는다 */
+.sheet .sname { grid-template-columns: minmax(0, 1fr) 46px; }
+.sheet .sname > .coin, .sheet .sname > .kd { justify-self: end; }
+.sheet .rows li { column-gap: 12px; }
+/* RATINGS 위쪽 줄: 체크 원 자리 없이 글자부터 */
+.rows.faded li { grid-template-columns: minmax(0, 1fr) auto; padding-right: 16px; }
+.rows.faded li > .gsp { display: none; }
+.rows.faded li + li::before { left: 16px; }
+/* 카드(타일) */
+.grid { gap: 10px; }
+.tile .add { padding: 14px 14px 16px; }
+/* 아래: 트레이와 내비를 한 덩어리로 붙이고, 내려 읽을 때는 트레이를 치운다 */
+.tray { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s; }
+html.tray-off .tray { transform: translateY(24px); opacity: 0; pointer-events: none; }
+html.tray-off body.tab-menu::after { height: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.tray .gutter { padding: 10px 10px 10px 12px; gap: 4px; }
+.prow { margin-top: 4px; }
+.portions button { padding: 5px 10px; }
+/* 글자 최소 10 (HIG 최소 11에 가깝게): 9·9.5 를 올린다 */
+.nav button { font-size: 10px; }
+.kd { font-size: 10px; }
+.ticks span { font-size: 10px; }
+.dmax, .mh { font-size: 11px; }
+/* REPORT: 날씨처럼 — 가운데 큰 숫자, 아래로 모듈 카드. 모듈 제목은 카드 안에 */
+.rep-hero { padding: 20px 0 28px; text-align: center; }
+.rep-hero small { font-size: 14px; color: var(--ink); }
+.rep-hero b { margin: 4px 0 6px; font-size: 64px; font-weight: 300; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.rep-hero b em { font-style: normal; font-size: 22px; font-weight: 400; letter-spacing: 0; margin: 0 2px; vertical-align: .9em; }
+.rep-hero span { font-size: 14px; }
+.rep > .cmp, .rep > .mod { margin-top: 12px; }
+.mod { background: var(--card); border-radius: 14px; overflow: hidden; }
+.modh { margin: 0; padding: 12px 16px 8px; font-size: 12px; font-weight: 600; color: var(--muted); box-shadow: inset 0 -.5px 0 var(--line); }
+.mod > .rows { border-radius: 0; background: none; }
+.daily.mod { padding: 0 0 14px; }
+.daily.mod > .modh { margin-bottom: 10px; }
+.daily.mod > :not(.modh) { margin-left: 12px; margin-right: 12px; }
+.daily.mod > .dsel { margin: 12px 16px 0; }
+.daily.mod > .dlg { margin: 10px 16px 0 !important; padding: 0 !important; }
+.rep > .none { margin-top: 16px; text-align: center; }
+
+
+/* ===== 레이아웃 3: 글자 체계 다섯 단계, 색은 선택·실행에만 =====
+   큰 제목 34/600 · 이름 15/400 · 값 15/600 · 이름표 13/400(흐림) · 보조 11/600.
+   숫자와 단위는 크기를 거의 같게 두고 색으로만 나눈다. 바탕 굵기 400 (300 은 REPORT 큰 숫자에만). */
+body { font-weight: 400; }
+:root { --coin: var(--ink); }
+/* 머리: 탭 이름 줄은 MENU 에만 (갱신 시각이 의미 있는 곳) */
+body:not(.tab-menu) .band .util { display: none; }
+.day[aria-pressed="true"] .dn { font-size: 34px; font-weight: 600; }
+.day[aria-pressed="true"] .wl { font-size: 20px; font-weight: 400; color: var(--muted); }
+.gh, .sheet .gh, .stockp .gh, .sheet h3 { color: var(--muted); font-weight: 400; }
+.sheet h3 > span { color: var(--ink); font-weight: 600; }
+.ghc::before { content: " · "; }
+/* 가격: 밑줄 없이 보조 줄 끝에. 목록 오른쪽 열은 코인(또는 DELI·SIDE 칩)과 분류 */
+.pr { text-decoration: none; }
+.pr .est { font-size: .9em; }
+.radd { align-items: center; }
+.radd .lead { align-self: center; margin-top: 0; }
+.radd .rk { flex: none; margin-left: auto; display: grid; justify-items: end; gap: 5px; padding-left: 8px; text-align: right; }
+.radd .rk .coin { min-height: 0; }
+.radd .rk small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.rows li.on .rk small { display: none; }
+.pill.o { margin-left: 0; }
+.dls { display: grid; gap: 5px; }
+.dl { display: flex; align-items: center; }
+.mc { align-items: center; }
+.mc .mn { align-self: center; }
+.ml { display: grid; place-items: center; padding-right: 4px; opacity: .45; }
+.ml.cur { opacity: 1; }
+.wx { width: 20px; height: 20px; display: block; }
+.wx { color: var(--ink); }
+.wx.sun { fill: currentColor; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.wx.moon, .wx.moon .st { fill: currentColor; }
+.ml { opacity: 1; color: var(--muted); }
+.ml .wx { color: inherit; opacity: .5; }
+.ml.cur .wx { color: var(--ink); opacity: 1; }
+/* 음료는 고리(◉) — 코인(●)과 모양으로 구분 */
+.pill.o u.on, .mc.cur .pill.o u.on { color: var(--ink); background: radial-gradient(circle, currentColor 0 1.6px, transparent 2.1px); box-shadow: inset 0 0 0 1.3px currentColor; }
+.mc.cur .pill.o u.on { color: var(--btn); }
+.rows li { grid-template-columns: minmax(0, 1fr) auto 32px; }
+.rstar { width: 32px; }
+.stockp .gh.hurry { color: var(--warn); font-weight: 600; }
+.tile .rsub .dotsep { display: none; }
+.tile .rsub .pr { display: block; margin-top: 2px; }
+.tile .rsub { flex-direction: column; align-items: flex-start; gap: 4px; }
+/* 하트: 누른 것만 보인다 (자리는 그대로, 누르면 켜진다) */
+.rstar[aria-pressed="false"] .hrt, .star[aria-pressed="false"] .hrt { opacity: 0; }
+/* 칩 두 가지: 구분(채운 회색) · 상태(윤곽). Pick 만 노랑 */
+.kd, .tg, .sold, .xq { font-size: 10px; font-weight: 600; letter-spacing: .03em; line-height: 16px; padding: 0 6px; border-radius: 999px; }
+.kd.sd, .tg, .tg.fz { background: var(--well); color: var(--ink); box-shadow: none; }
+.kd.dl { background: var(--btn); color: var(--btn-ink); }
+.kd.pk { background: var(--coin-pick); color: #fff; }
+.sold { background: none; box-shadow: inset 0 0 0 1px var(--muted); color: var(--muted); }
+.xq { background: none; color: var(--muted); padding: 0 2px; }
+.coin i { width: 7px; height: 7px; }
+/* 트레이: 값 15/600, 이름표 13/400, 보조 11/600 — 세 가지만 */
+.meter { gap: 2px 6px !important; }
+.ml { font-size: 12px; }
+.mc { gap: 10px; padding: 6px 10px; align-items: center; opacity: .5; }
+.mc .mn { font-size: 10px; font-weight: 600; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.mc.cur .mn { color: var(--ink); }
+.mc > em { font-size: 11px; }
+.pill { gap: 3px; align-items: center; }
+.pill u { width: 7px; height: 7px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1.2px var(--muted); text-decoration: none; }
+.pill u.on { background: var(--ink); box-shadow: none; }
+.pill.o u { border-radius: 50%; }
+.pill u.x { background: var(--coin-pick); box-shadow: none; }
+.pill u.ov { background: var(--warn); box-shadow: none; }
+.pill + .pill { margin-left: 6px; padding-left: 8px; box-shadow: inset .5px 0 0 var(--line); }
+.mc.cur .pill u.on { background: var(--btn); }
+.plabel { font-size: 12px; line-height: 16px; }
+.plabel b { font-weight: 600; }
+.worth { font-size: 11px; }
+.worth b { font-size: 10px; }
+/* 트레이 시중가: 이름표 위, 값 아래 두 줄로 — 잘리지 않게 */
+.plabel .worth { display: grid; gap: 1px; white-space: nowrap; }
+.plabel .worth b { margin: 0; line-height: 1.2; }
+.plabel .worth { font-size: 12px; color: var(--ink); }
+.half { padding: 6px 11px; font-size: 12px; box-shadow: none; background: var(--well); color: var(--muted); }
+.half[aria-pressed="true"] { box-shadow: none; background: var(--btn); color: var(--btn-ink); font-weight: 600; }
+.portions button { font-size: 12px; }
+/* 내비 */
+.nav button { font-size: 10px; letter-spacing: .06em; }
+/* RATINGS: 할 일(별점 남기기)은 진하게, 끝난 것은 흐리게 */
+.rows.todo li { grid-template-columns: minmax(0, 1fr) auto; padding-right: 16px; }
+.rows.todo li > .gsp { display: none; }
+.rows.todo li + li::before { left: 16px; }
+.rows.todo .sname { color: var(--ink); }
+.rows.todo .stars button { color: var(--muted); }
+.rows.todo .stars svg { fill: none; stroke: currentColor; stroke-width: 1.2; }
+.rows.todo .stars button[aria-pressed="true"] svg { fill: currentColor; stroke: none; }
+.rows.rated .sname { color: var(--muted); }
+.stars button { color: rgba(127, 120, 100, .35); }
+/* CART 머리(끼니·식당) */
+.sheet h3 em { color: var(--muted); }
+.sheet h3 .ate { font-size: 13px; font-weight: 400; padding: 5px 12px; }
+.clr { font-size: 13px; }
+ /* 좁은 화면: 트레이에서 숫자가 잘리지 않게 */
+
+/* 원을 키운다: 코인·음료 10px. 추가취식이면 줄이 쌓이며 칸이 위아래로 자란다 */
+.pill { gap: 4px; }
+.pill u { width: 10px; height: 10px; box-shadow: inset 0 0 0 .8px var(--muted); }
+.pill u.on, .pill u.x, .pill u.ov { box-shadow: none; }
+.pill + .pill { margin-left: 8px; padding-left: 10px; }
+.pill.o u.on, .mc.cur .pill.o u.on { background: radial-gradient(circle, currentColor 0 2.3px, transparent 2.8px); box-shadow: inset 0 0 0 1.5px currentColor; }
+.dls { gap: 7px; }
+.mc { padding: 8px 12px; }
+.mc .mn { width: 20px; flex: none; }
 </style>
 
 <div class="top">
 <header class="band">
   <div class="gutter">
     <div class="when"><div class="week" id="dates"></div><div class="sg" id="meals" role="group" aria-label="끼니"></div></div>
+    <div class="althead" id="althead" hidden></div>
     <div class="util"><b class="ptitle" id="ptitle" hidden></b><div class="rtabs" id="rests" role="group" aria-label="식당"></div><span class="utilr"><span class="livew" id="live" hidden role="status"><i class="live"></i>동시접속중</span><button id="stamp" aria-label="메뉴 새로 가져오기"></button></span></div>
   </div>
 </header>
-<div class="gutter althead" id="althead" hidden></div>
-<nav class="rail" aria-label="카테고리"><div class="gutter"><div class="rs" id="rail"></div></div></nav>
 </div>
+<nav class="rail" aria-label="카테고리"><div class="gutter"><div class="rs" id="rail"></div><span class="railopt" id="railopt"></span></div></nav>
 <main><div class="gutter"><div class="sheet page" id="page" hidden></div><div id="list"><div class="empty">메뉴를 불러오는 중입니다.</div></div></div></main>
 
 <div class="tray" id="tray" hidden>
@@ -634,8 +818,14 @@ const shelfOf = (it) => (it?.shelf && it.shelf !== it.cat && it.shelf !== S.cat 
 const kindChip = (it) => { const t = (it.tag || "").toUpperCase(); if (!t) return ""; const c = /PICK/.test(t) ? "pk" : t === "DELI" ? "dl" : "sd"; return `<i class="kd ${c}">${esc(t)}</i>`; };
 const lead2 = (it, dots) => kindChip(it) || (dots ? `<span class="coin">${dots}</span>` : "");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
+// 트레이에서 쓰는 짧은 식당 이름
+const SHORT = { REST000007: "R5", CAF04: "FH" };
+// 아침·저녁: 날씨 앱처럼 해와 달
+const SUN = '<svg class="wx sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="4"/><path d="M10 1.8v2.3M10 15.9v2.3M1.8 10h2.3M15.9 10h2.3M4.2 4.2l1.6 1.6M14.2 14.2l1.6 1.6M4.2 15.8l1.6-1.6M14.2 5.8l1.6-1.6"/></svg>';
+const MOON = '<svg class="wx moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.6 12.6A6.6 6.6 0 0 1 7.4 4.4a6.6 6.6 0 1 0 8.2 8.2z"/><path class="st" d="M14.2 3.2l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05-1.05-.45 1.05-.45z"/></svg>';
+const TRASH = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3.200h8M4.700 3.200V2h2.600v1.200M3.200 3.200l.500 7h4.600l.500-7"/></svg>';
 const MINUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7"/></svg>', PLUS = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.500 6h7M6 2.500v7"/></svg>';
-const won = (it) => (it?.price ? `${it.est ? "약\u00a0" : ""}${it.price.toLocaleString("ko-KR")}\u2060원` : "");
+const won = (it) => (it?.price ? `${it.est ? '<small class="est">약\u00a0</small>' : ""}${it.price.toLocaleString("ko-KR")}\u2060원` : "");
 // 가격은 누르면 출처가 뜬다(줄 전체가 담기 버튼이라, 가격만 따로 받는다)
 // 시중가: 딸린 사이드가 있으면 그 값까지 합친다(둘 중 하나라도 추정이면 '약'). own/sidePrice 는 출처 창에서 나눠 보여 준다.
 const priceOf = (r, side) => { const own = r.pr > 0 ? r.pr : null, sp = side && side.pr > 0 ? side.pr : null;
@@ -955,7 +1145,8 @@ function render() {
   const vbtn = `<button class="vbtn" data-view="${other}" aria-label="${other === "list" ? "목록으로 보기" : "카드로 보기"}">${ICON[other]}</button>`;
   const legend = S.edit ? "" : searching
     ? `<div class="viewopt"><label class="qbox">${GLASS}<input id="q" type="search" enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="메뉴 검색" value="${esc(S.q)}"></label><button class="vbtn" data-qclose aria-label="검색 닫기"><svg class="ln" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button>${vbtn}</div>`
-    : `<div class="viewopt"><span class="vnote">${tabbed ? note : "별점, 취식 기록을 참고해서 조합한 추천 메뉴예요."}</span><button class="vbtn" data-qopen aria-label="메뉴 검색">${GLASS}</button>${tabbed ? vbtn : ""}</div>`;
+    : ((tabbed ? note : "별점, 취식 기록을 참고해서 조합한 추천 메뉴예요.") ? `<p class="vnote">${tabbed ? note : "별점, 취식 기록을 참고해서 조합한 추천 메뉴예요."}</p>` : "");
+  $("railopt").innerHTML = S.edit || searching ? "" : `<button class="vbtn" data-qopen aria-label="메뉴 검색">${GLASS}</button>${tabbed ? vbtn : ""}`;
   const bodyOf = (l) => S.view === "list" ? listBody(l, sel, f) : `<div class="grid">${gridBody(l, sel, f, isHidden)}</div>`;
   // 검색: 이 끼니의 모든 분류에서 이름으로 찾는다. 입력 칸은 그대로 두고 결과만 갈아 끼운다(한글 조합이 끊기지 않게).
   S.find = (q) => { const t = q.trim().toLowerCase().replace(/\s+/g, ""); if (!t) return bodyOf(S.cat === "추천" ? [] : list);
@@ -981,26 +1172,41 @@ function groupsOf(list, f) {
 function gridBody(list, sel, f, isHidden) {
   const draw = (l) => l.map((it) => tile(it, sel[it.name] || 0, f[it.name] || 0, isHidden(it))).join("");
   if (S.edit) return draw(list);
-  return groupsOf(list, f).map(([t, l]) => `${t ? `<p class="gh">${t}</p>` : ""}${draw(l)}`).join("");
+  const plain = S.cat !== "수제" && S.q == null;
+  return groupsOf(list, f).map(([t, l]) => { const cm = commonOf(l, plain); S.cm = cm; const h = `${ghHtml(t, cm)}${draw(l)}`; S.cm = null; return h; }).join("");
 }
 // 목록 한 줄: 체크 원 · 이름 + 보조 줄(코인 · 분류 · kcal) · 수량 · 하트
 function rowHtml(it, q, plain) {
   const nm = esc(it.name);
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", shelfOf(it) || (plain ? "" : it.cat), noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
-  const blk = S.blocked?.(it);
+  const cm = S.cm || {};
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const blk = S.blocked?.(it), label = labelOf(it, plain), lead = lead2(it, dots);
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span><span class="rsub">${lead2(it, dots)}<span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span></span>${photoBtn(it)}
+      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span>${sub || it.price ? `<span class="rsub"><span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span>` : ""}</span>${photoBtn(it)}${lead || label ? `<span class="rk">${lead}${label ? `<small>${esc(label)}</small>` : ""}</span>` : ""}
     </button>
     <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">${PLUS}</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
   </li>`;
 }
+// 묶음 안 모든 메뉴가 같은 값(분류·코인·구분)이면 머리글에 한 번만 쓰고 줄에서는 뺀다 (3개 이상일 때만)
+const labelOf = (it, plain) => (plain ? "" : it.cat); // 진열 구분(컵푸드 등)은 CART 에서만 보인다
+function commonOf(l, plain) {
+  return {}; // 코인·분류는 줄마다 오른쪽 열에 보인다 (머리글로 올리지 않음)
+  if (l.length < 3) return {};
+  const same = (fn) => { const v = fn(l[0]); return l.every((x) => fn(x) === v) ? v : undefined; };
+  const cm = { label: same((x) => labelOf(x, plain)) || undefined, tag: same((x) => x.tag || "") || undefined, coin: same((x) => (x.drink ? -1 : x.coin ?? -2)) };
+  if (!(cm.coin > 0) || cm.tag) cm.coin = undefined;
+  return cm;
+}
+const cmText = (cm) => [cm.label, cm.tag ? cm.tag.toUpperCase() : "", cm.coin ? `${cm.coin}코인` : ""].filter(Boolean).join(" · ");
+const ghHtml = (title, cm) => { const t = [title, cmText(cm)].filter(Boolean); return t.length ? `<p class="gh">${t.map((x, i) => i ? `<span class="ghc">${esc(x)}</span>` : esc(x)).join("")}</p>` : ""; };
 function listBody(list, sel, f) {
   const plain = S.cat !== "수제" && S.q == null;
-  const group = (title, l) => l.length ? `${title ? `<p class="gh">${title}</p>` : ""}<ul class="rows">${l.map((it) => rowHtml(it, sel[it.name] || 0, plain)).join("")}</ul>` : "";
+  const group = (title, l) => { if (!l.length) return ""; const cm = commonOf(l, plain); S.cm = cm;
+    const h = `${ghHtml(title, cm)}<ul class="rows">${l.map((it) => rowHtml(it, sel[it.name] || 0, plain)).join("")}</ul>`; S.cm = null; return h; };
   return groupsOf(list, f).map(([t, l]) => group(t, l)).join("");
 }
 const rank = (c) => { const i = CAT_ORDER.indexOf(c); return i < 0 ? 50 : i; };
@@ -1074,13 +1280,14 @@ function tile(it, q, times, hidden) {
   }
   // 목록 줄과 같은 문법: 체크 원 · 이름 · 보조 줄(코인 · 분류 · kcal) · 수량 캡슐
   const dots = it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "";
-  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", shelfOf(it) || (S.cat === "수제" || S.q != null ? it.cat : ""), tagText(it), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
+  const cm = S.cm || {};
+  const sub = [it.coin == null && !it.drink ? "곁들임" : "", it.withSide ? `+ ${it.withSide}` : "", cm.label ? "" : labelOf(it, S.cat !== "수제" && S.q == null), noHand(tagText(it)), it.kcal ? `${it.kcal} kcal` : "", S.rate[it.name] ? `★ ${S.rate[it.name]}` : ""].filter(Boolean).join(" · ");
   const blk = S.blocked?.(it);
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
       <span class="nrow">${photoBtn(it)}<span class="name">${soldChip(it)}${n}</span></span>
-      <span class="rsub">${lead2(it, dots)}<span>${esc(sub)}${priceTag(it, sub)}</span></span>
+      <span class="rsub">${cm.tag || cm.coin ? "" : lead2(it, dots)}<span>${esc(sub)}${priceTag(it, sub)}</span></span>
     </button>
     <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
     ${q ? `<span class="rq"><button data-sub="${n}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${n}" aria-label="하나 더">${PLUS}</button></span>` : ""}
@@ -1101,15 +1308,24 @@ function renderTray(items, sel, n, k) {
   const drinkCls = st(b.drinks, b.drinkMax, b.drinks > b.drinkMax);
   // 미터: 끼니(줄) × 식당(칸). 칸마다 따로 세고, 지금 보는 칸을 진하게 한다. 칸을 누르면 그 끼니·식당으로 간다.
   // 추가취식(기본/+1/+2)은 지금 보는 칸의 것이고, 누르는 즉시 그 칸의 한도가 늘어난다(담은 것이 없어도).
-  const pillOf = (x) => `<span class="pill ${st(x.coins, x.base, x.coins > x.cap)}"><b>${x.coins}</b><i>/${x.base}</i><u class="dot"></u></span>` +
-    `<span class="pill ${st(x.drinks, x.drinkMax, x.drinks > x.drinkMax)}"><b>${x.drinks}</b><i>/${x.drinkMax}</i><u class="dot o"></u></span>`;
+  // 코인: 한도만큼 빈 원, 쓴 만큼 채움. 5코인째(지정 음료)는 노랑, 한도를 넘으면 주황. 음료도 같은 방식
+  const dotsOf = (used, base, cap) => Array.from({ length: Math.max(base, used) }, (_, i) => `<u class="${i >= used ? "" : i < base ? "on" : i < cap ? "x" : "ov"}"></u>`).join("");
+  // 1인분 = 한 줄(코인 4 + 음료 1). 추가취식이면 줄이 늘어난다. 5코인째·초과는 마지막 줄 끝에 붙는다.
+  const pillOf = (x, n) => { const u = (c) => `<u class="${c}"></u>`, lines = [];
+    for (let i = 0; i < n; i++) {
+      let c = ""; for (let j = 0; j < 4; j++) c += u(x.coins > i * 4 + j ? "on" : "");
+      let d = i < x.drinkMax ? u(x.drinks > i ? "on" : "") : "";
+      if (i === n - 1) { for (let e = x.base; e < x.coins; e++) c += u(e < x.cap ? "x" : "ov"); for (let e = x.drinkMax; e < x.drinks; e++) d += u("ov"); }
+      lines.push(`<span class="dl"><span class="pill">${c}</span>${d ? `<span class="pill o">${d}</span>` : ""}</span>`);
+    }
+    return `<span class="dls" aria-hidden="true">${lines.join("")}</span>`; };
   const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.d === S.date && r.m === m));
   $("meter").style.gridTemplateColumns = `auto repeat(${S.rests.length}, minmax(0, 1fr))`;
-  $("meter").innerHTML = `<span></span>${S.rests.map((x) => `<span class="mh${x.id === S.rest ? " cur" : ""}">${esc(x.name)}</span>`).join("")}` + meals.map((m) =>
-    `<b class="ml${m === S.meal ? " cur" : ""}">${MEALS[m]}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
+  $("meter").innerHTML = meals.map((m) =>
+    `<b class="ml${m === S.meal ? " cur" : ""}" aria-label="${MEALS[m]}">${m === "1" ? SUN : MOON}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
       const np = portionsOf(kk);
-      return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}">${pillOf(bb)}${np > 1 || S.share[kk] ? `<em>${[np > 1 ? `+${np - 1}` : "", S.share[kk] ? "아침 식사" : ""].filter(Boolean).join(" · ")}</em>` : ""}</button>`; }).join("")).join("");
-  $("plabel").innerHTML = `<b>${MEALS[S.meal] || ""} · ${esc(S.rests.find((x) => x.id === S.rest)?.name || "")}</b>${worthHtml(items, sel)}`;
+      return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}"><span class="mn">${esc(SHORT[x.id] || x.name)}</span>${pillOf(bb, np)}</button>`; }).join("")).join("");
+  $("plabel").innerHTML = worthHtml(items, sel); // 끼니·식당은 미터의 진한 칸이 이미 말해 준다
 
   const notes = [];
   if (b.coins > b.cap) notes.push(`${b.cap}코인 초과`);
@@ -1216,7 +1432,7 @@ function renderRatings(el) {
     <div class="sum">${avg ? `평균 <b>★ ${avg}</b>` : ""}</div></div>
     ${names.length ? `<div class="rs"><button data-rfil="" aria-pressed="${!S.rateFilter}">전체<span class="n">${names.length}</span></button>${[5, 4, 3, 2, 1].filter(cnt).map((v) => `<button data-rfil="${v}" aria-pressed="${S.rateFilter === v}">★ ${v}<span class="n">${cnt(v)}</span></button>`).join("")}</div>` : ""}`;
   el.innerHTML = `<div class="panel stockp">
-    ${eaten && !S.rateFilter ? `<p class="gh">별점을 기다리는 메뉴 · 별점은 추천 조합에 반영돼요.</p><ul class="rows faded">${eaten}</ul>` : ""}
+    ${eaten && !S.rateFilter ? `<p class="gh">별점을 남겨 주세요<span class="ghc">추천 조합에 반영돼요</span></p><ul class="rows todo">${eaten}</ul>` : ""}
     ${shown.length ? `<p class="gh">별점을 남긴 메뉴</p><ul class="rows rated">${shown.map((nm) => `<li><span class="sbody"><span class="sname"><span>${esc(nm)}</span></span>${starsHtml(nm)}</span></li>`).join("")}</ul>` : ""}
     ${!eaten && !names.length ? `<p class="none">식사 기록이 없습니다.</p>` : ""}</div>`;
   el.hidden = false;
@@ -1248,7 +1464,7 @@ function dailyHtml(ym, days) {
   // 끼 수: 같은 날짜 축 아래에 점으로(한 점 = 한 끼). 금액과 단위가 달라 축을 따로 둔다.
   const dots = Array.from({ length: n }, (_, i) => { const d = ym + String(i + 1).padStart(2, "0"), x = days[d];
     return `<span class="${d === S.repDay ? "cur" : ""}">${x ? "<i></i>".repeat(Math.min(x.meals, 8)) : ""}</span>`; }).join("");
-  return `<p class="gh">날짜별</p><section class="daily"><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="mdots" aria-hidden="true">${dots}</div><div class="ticks">${ticks}</div>
+  return `<section class="daily mod"><p class="modh">날짜별</p><div class="dmax">${wonN(max)}</div><div class="cols">${cols}</div><div class="mdots" aria-hidden="true">${dots}</div><div class="ticks">${ticks}</div>
     <ul class="lg dlg"><li><i class="sv"></i>아낀 금액</li><li><i class="pd"></i>지출</li><li><i class="ml2"></i>취식</li></ul>
     <p class="dsel"><b>${dayLabel(S.repDay)}</b> 실질 가치 약 ${wonN(sel.worth)} · 지출 ${wonN(sel.paid)} · ${sel.meals}끼</p></section>`;
 }
@@ -1302,12 +1518,12 @@ function renderReport(el) {
   $("althead").innerHTML = `<div class="when"><div class="week">${tabs.map((ym) => `<button class="day" data-rmonth="${ym}" aria-pressed="${ym === cur}"><span class="dn">${+ym.slice(4)}</span><span class="wl">${MON[+ym.slice(4) - 1]}</span></button>`).join("")}</div>
     <div class="sum">${keys.length ? `지금까지 <b>약 ${wonN(total)}</b>` : ""}</div></div>`;
   el.innerHTML = `<div class="panel rep">
-    <div class="rep-hero"><small>${+cur.slice(4)}월에 아낀 금액</small><b>${m0.meals ? `약 ${wonN(m0.worth - m0.paid)}` : "–"}</b>
+    <div class="rep-hero"><small>${+cur.slice(4)}월에 아낀 금액</small><b>${m0.meals ? `<em>약</em>${Math.round(m0.worth - m0.paid).toLocaleString("ko-KR")}<em>원</em>` : "–"}</b>
       <span>${m0.meals ? `${m0.meals}끼${m0.paid ? ` · 지출의 ${(m0.worth / m0.paid).toFixed(1)}배 가치` : " · 지출 없음"}` : "테이크아웃한 식사가 없습니다."}</span></div>
     ${m0.meals ? cmpHtml(m0) + dailyHtml(cur, days) : ""}
-    ${keys.length > 1 ? `<p class="gh">월별</p><ul class="rows">${keys.map((ym) => { const x = months[ym], mx = Math.max(1, ...keys.map((y) => months[y].worth));
-      return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul>` : ""}
-    ${got.length ? `<p class="gh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? `<span class="pr" data-price="${esc(g.nm)}">${wonN(g.v * g.q)}</span>` : "–"}</span></li>`).join("")}</ul>` : ""}
+    ${keys.length > 1 ? `<section class="mod"><p class="modh">월별</p><ul class="rows">${keys.map((ym) => { const x = months[ym], mx = Math.max(1, ...keys.map((y) => months[y].worth));
+      return `<li><span>${+ym.slice(4)}월</span>${stackBar(x, mx)}<span>약 ${wonN(x.worth - x.paid)} <em>${x.meals}끼</em></span></li>`; }).join("")}</ul></section>` : ""}
+    ${got.length ? `<section class="mod"><p class="modh">${+cur.slice(4)}월에 가져온 메뉴</p><ul class="rows val">${got.map((g) => `<li><span>${esc(g.nm)}${g.q > 1 ? ` ×${g.q}` : ""}<em> ${dayLabel(g.d)} ${MEALS[g.m] || ""}</em></span><span>${g.v ? `<span class="pr" data-price="${esc(g.nm)}">${wonN(g.v * g.q)}</span>` : "–"}</span></li>`).join("")}</ul></section>` : ""}
     ${keys.length || got.length ? `<p class="none">시중가는 AI 검색 결과로 추정치입니다.</p>` : ""}</div>`;
   el.hidden = false;
 }
@@ -1339,9 +1555,9 @@ function renderSheet() {
         const lead = side ? `<span class="gsp"></span>`
           : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
         const sub = "";
-        const right = g ? `<span class="gst">${g === "ok" ? "가져옴" : "바꿈"}</span><span></span>`
-          : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">${PLUS}</button></span>
-          <button class="del" data-del="${nm}" data-k="${ke}" aria-label="${nm} 빼기">×</button>`;
+        const right = g ? `<span class="gst">${g === "ok" ? "가져옴" : "바꿈"}</span>`
+          : `<span class="rq"><button data-sub="${nm}" data-k="${ke}" aria-label="${q > 1 ? "하나 빼기" : `${nm} 빼기`}">${q > 1 ? MINUS : TRASH}</button><span>${q}</span><button data-add="${nm}" data-k="${ke}" aria-label="하나 더">${PLUS}</button></span>
+`;
         return `<li class="${tied ? "tied" : ""}${g ? " got" : ""}">${lead}<span class="sbody"><span class="sname"><span>${label}${q > 1 && g ? ` ×${q}` : ""}</span>${coin}</span>${sub}</span>${right}</li>`;
       }).join("") + "</ul>";
   });
@@ -1538,6 +1754,10 @@ function handle(e) {
 }
 // click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
 document.addEventListener("click", (e) => handle(e), true);
+{ let lastY = scrollY;
+  addEventListener("scroll", () => { const y = scrollY, h = document.documentElement;
+    if (y < 80 || y < lastY - 6) h.classList.remove("tray-off"); else if (y > lastY + 6) h.classList.add("tray-off");
+    if (Math.abs(y - lastY) > 6) lastY = y; }, { passive: true }); }
 // 메모는 치는 동안 화면을 다시 그리지 않는다 (입력 중 커서가 튀지 않게)
 document.addEventListener("input", (e) => {
   if (e.target.id === "q") { S.q = e.target.value; const lb = $("lbody"); if (lb) lb.innerHTML = S.find(S.q); return; }

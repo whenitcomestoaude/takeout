@@ -836,7 +836,7 @@ const tagText = (it) => [it.cat === "냉동" ? "Frozen" : "", it.hand ? "수제"
 // 현장 구분(패밀리홀): 코인 점 대신 DELI / SIDE / 1PICK / 2PICK 칩으로. 구분이 없는 식당(R5)은 코인 점.
 // R5 진열대 이름(컵푸드·사이드…) — 탭 이름과 같으면 되풀이하지 않는다
 const shelfOf = (it) => (it?.shelf && it.shelf !== it.cat && it.shelf !== S.cat ? it.shelf : "");
-const kindChip = (it) => { const t = (it.tag || "").toUpperCase(); if (!t) return ""; const c = /PICK/.test(t) ? "pk" : t === "DELI" ? "dl" : /포케|밸런스/.test(t) ? "sp" : "sd"; /* 포케·밸런스 = 5코인 코너 */ return `<i class="kd ${c}">${esc(t)}</i>`; };
+const kindChip = (it) => { const t = (it.tag || "").toUpperCase(); if (!t) return ""; const c = /PICK/.test(t) ? "pk" : t === "DELI" ? "dl" : /POKE|BALANCE/.test(t) ? "sp" : "sd"; /* 포케·밸런스 = 5코인 코너 */ return `<i class="kd ${c}">${esc(t)}</i>`; };
 const lead2 = (it, dots) => kindChip(it) || (dots ? `<span class="coin">${dots}</span>` : "");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
 // 트레이에서 쓰는 짧은 식당 이름
@@ -885,7 +885,7 @@ function itemsFor(d, m, rid = S.rest) {
       // "*품절 ○○" — 이름에서 떼어 품절 표시로 돌린다(하트·기록이 원래 이름과 이어지게). 같은 이름이 안 품절로도 있으면 그쪽을 따른다.
       const sold = SOLD.test(r.n), nm = sold ? r.n.replace(SOLD, "").trim() : r.n;
       if (seen.has(nm)) { if (!sold) seen.get(nm).sold = false; continue; }
-      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, ...priceOf(r, sideName && HALF.test(r.n) ? sidePr.get(r.ct) : null), psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, fs: r.fs || null, shelf: rid === "REST000007" && r.sh && r.sh !== "음료" && r.sh !== "냉동" ? r.sh : null, tag: /DELI|SIDE|Pick|포케|밸런스/i.test(r.tg || "") ? r.tg.replace("?", "") : null, drink: cat === "음료" });
+      seen.set(nm, { name: nm, sold, cat: breadFix(tteokFix(fruitFix(cat, nm), nm), nm), /* r.pc(Claude가 매긴 분류)는 저장만 해 두고 아직 쓰지 않는다 */ withSide: sideName && HALF.test(r.n) ? sideName : null, ...priceOf(r, sideName && HALF.test(r.n) ? sidePr.get(r.ct) : null), psrc: r.ps || null, ptitle: r.pt || null, plink: r.pl || null, coin: /pick/i.test(r.tg || "") ? 3 : r.coin, kcal: r.k, hand: r.hm, photo: r.p || null, fs: r.fs || null, shelf: rid === "REST000007" && r.sh && r.sh !== "음료" && r.sh !== "냉동" ? r.sh : null, tag: /DELI|SIDE|Pick|포케|밸런스/i.test(r.tg || "") ? ({ 포케: "POKE", 밸런스: "BALANCE" }[r.tg] || r.tg.replace("?", "")) : null, drink: cat === "음료" });
     }
   }
   const list = [...seen.values()];

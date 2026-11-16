@@ -736,6 +736,30 @@ body:not(.tab-menu) .band .util { display: none; }
 body::after, body.tab-menu::after, body.tab-cart::after, body.tab-stock::after, html.tray-off body.tab-menu::after { display: none; }
 
 .kd.sp { background: var(--ink); color: var(--bg); } /* 패밀리홀 포케·밸런스(5코인) */
+
+/* 메뉴 상세 시트 */
+.dn { pointer-events: auto; cursor: pointer; }
+.dsheet .dph { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 14px; margin: 8px 0 4px; }
+.dsheet .dname { margin: 10px 0 6px; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.dsheet .dchips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 14px; }
+.dsheet .dchips .tg { margin-left: 0; }
+.dsheet .drows { background: var(--card); border-radius: 14px; }
+.dsheet .drows li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 16px; font-size: 14px; }
+.dsheet .drows li + li::before { left: 16px; }
+.dsheet .drows em { font-style: normal; color: var(--muted); }
+.dsheet .drows .lnk { font-size: 14px; color: var(--ink); display: inline-flex; align-items: baseline; gap: 6px; text-decoration: none; }
+.dsheet .drows .lnk * { text-decoration: none; }
+.dsheet .drows .lnk small { font-size: 11px; color: var(--muted); }
+.dstat { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0 0; }
+.dstat div { background: var(--card); border-radius: 14px; padding: 12px 0 10px; text-align: center; display: grid; gap: 2px; }
+.dstat b { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dstat small { font-size: 11px; color: var(--muted); }
+.dsheet .dnote { margin: 8px 4px 0; font-size: 12px; color: var(--muted); }
+.dsheet .dnote:empty { display: none; }
+.dact { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.dact .ate { background: var(--well); color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 10px; font-size: 13px; border-radius: 999px; }
+.dact .ate[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
+.dact .hrt { width: 14px; height: 14px; }
 </style>
 
 <div class="top">
@@ -781,7 +805,7 @@ const QUERY = `select coalesce(json_agg(t), '[]'::json) as j from (
   order by menu_dt, meal, course, course_type, seq) t`;
 const CAT_ORDER = ["샌드위치", "샐러드", "핫밀", "밥·죽", "라이스", "컵라면", "누들", "빵", "냉동", "간식·요거트", "헬스크레딧", "과일", "떡", "사이드", "컵푸드", "도시락", "기타", "음료"];
 
-const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, share: {}, picks: {}, fav: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stockBy: (() => { try { return localStorage.getItem("takeout-stockby") === "date" ? "date" : "cat"; } catch (_) { return "cat"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
+const S = { rest: "REST000007", rests: [], rows: [], date: null, meal: null, cat: null, portions: {}, share: {}, picks: {}, fav: new Set(), want: new Set(), hide: new Set(), hideCats: new Set(), rank: {}, mode: {}, ate: {}, memo: {}, tab: (() => { try { return ["menu", "cart", "stock", "ratings", "report"].includes(localStorage.getItem("takeout-tab")) ? localStorage.getItem("takeout-tab") : "menu"; } catch (_) { return "menu"; } })(), stockBy: (() => { try { return localStorage.getItem("takeout-stockby") === "date" ? "date" : "cat"; } catch (_) { return "cat"; } })(), eatSel: new Set(), stock: [], eaten: [], rate: {}, noPick: false, view: "grid", edit: false, combos: [], updated: null };
 let docRef = null, saveTimer = null;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -989,7 +1013,7 @@ const J = (v) => JSON.stringify(v ?? null);
 const clone = (v) => JSON.parse(JSON.stringify(v ?? null));
 function snapshot() {
   const keys = Object.keys(S.picks).sort().slice(-1000); // 끼니 1,000개쯤(하루 두 끼면 1년 반)까지 기록을 둔다
-  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-1000), fav: [...S.fav], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
+  return clone({ stock: S.stock.slice(-300), eaten: S.eaten.slice(-1000), fav: [...S.fav], want: [...(S.want || [])], hide: [...S.hide], hideCats: [...S.hideCats], noPick: S.noPick, view: S.view, rest: S.rest, rank: pruned(S.rank), mode: kept(S.mode, keys), ate: kept(S.ate, keys), memo: pruned(S.memo), rate: S.rate, picks: Object.fromEntries(keys.map((k) => [k, S.picks[k]])), portions: S.portions, share: S.share });
 }
 // 예전 키(식당 없음)는 R5 B1F 것으로 옮긴다
 const mig = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, val]) => [k.includes("|") ? k : `REST000007|${k}`, val]));
@@ -1001,7 +1025,7 @@ function merge3(b, mine, theirs) {
     for (const k of new Set([...Object.keys(M), ...Object.keys(T)])) { const v = J(M[k]) !== J(B[k]) ? M[k] : T[k]; if (v !== undefined) o[k] = v; }
     out[f] = o;
   }
-  for (const f of ["fav", "hide", "hideCats"]) {
+  for (const f of ["fav", "hide", "hideCats", "want"]) {
     const B = new Set(b[f] || []), M = new Set(mine[f] || []), T = new Set(theirs[f] || []);
     out[f] = [...new Set([...M, ...T])].filter((x) => (M.has(x) !== B.has(x) ? M.has(x) : T.has(x)));
   }
@@ -1013,7 +1037,7 @@ function merge3(b, mine, theirs) {
   return out;
 }
 function applyState(v) {
-  S.fav = new Set(v.fav || []); S.picks = v.picks || {}; S.portions = v.portions || {}; S.share = v.share || {};
+  S.fav = new Set(v.fav || []); S.want = new Set(v.want || []); S.picks = v.picks || {}; S.portions = v.portions || {}; S.share = v.share || {};
   if (v.rest) S.rest = v.rest;
   S.hide = new Set(v.hide || []); S.hideCats = new Set(v.hideCats || []); S.stock = Array.isArray(v.stock) ? v.stock : []; S.eaten = Array.isArray(v.eaten) ? v.eaten : [];
   S.rank = v.rank || {}; S.mode = v.mode || {}; S.ate = v.ate || {}; S.memo = v.memo || {}; S.rate = v.rate || {}; S.noPick = !!v.noPick; S.view = v.view === "list" ? "list" : "grid";
@@ -1082,6 +1106,7 @@ async function initStore() {
       if (S.rows.length) render();
     }
   } catch (e) { console.warn("store", e); }
+  S.stateReady = true; if (S.rows.length) render();
 }
 
 // 담은 것의 시중가 합계(값을 아는 것만). 추정가가 하나라도 섞이면 '약'
@@ -1092,6 +1117,7 @@ function worthHtml(items, sel) {
 }
 // ---------- render ----------
 function render() {
+  if (S.stateReady && S.want?.size && S.rows.length && !S.applying) applyWants();
   if (!S.rests.some((x) => x.id === S.rest)) S.rest = S.rests[0]?.id;
   $("rests").innerHTML = S.rests.map((x) => `<button data-rest="${x.id}" aria-pressed="${x.id === S.rest}">${esc(x.name)}</button>`).join("");
   const dates = [...new Set(S.rows.filter((r) => r.r === S.rest).map((r) => r.d))];
@@ -1211,7 +1237,7 @@ function rowHtml(it, q, plain) {
   return `<li class="${q ? "on" : ""}${blk ? " blk" : ""}">
     <button class="radd" data-tog="${nm}"${blk ? " disabled" : ""} aria-pressed="${!!q}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="rt"><span class="rname">${soldChip(it)}${nm}</span>${sub || it.price ? `<span class="rsub"><span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span>` : ""}</span>${photoBtn(it)}${lead || label ? `<span class="rk">${lead}${label ? `<small>${esc(label)}</small>` : ""}</span>` : ""}
+      <span class="rt"><span class="rname">${soldChip(it)}<span class="dn" data-detail="${nm}">${nm}</span></span>${sub || it.price ? `<span class="rsub"><span class="st">${esc(sub)}</span>${priceTag(it, sub)}</span>` : ""}</span>${photoBtn(it)}${lead || label ? `<span class="rk">${lead}${label ? `<small>${esc(label)}</small>` : ""}</span>` : ""}
     </button>
     <span class="rq">${q ? `<button data-sub="${nm}" aria-label="하나 빼기">${MINUS}</button><span>${q}</span><button data-add="${nm}" aria-label="하나 더">${PLUS}</button>` : ""}</span>
     <button class="rstar" data-star="${nm}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
@@ -1312,7 +1338,7 @@ function tile(it, q, times, hidden) {
   return `<div class="tile${q ? " on" : ""}${blk ? " blk" : ""}">
     <button class="add" data-tog="${n}"${blk ? " disabled" : ""} aria-pressed="${!!q}" aria-label="${n}">
       <span class="lead"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></span>
-      <span class="nrow">${photoBtn(it)}<span class="name">${soldChip(it)}${n}</span></span>
+      <span class="nrow">${photoBtn(it)}<span class="name">${soldChip(it)}<span class="dn" data-detail="${n}">${n}</span></span></span>
       <span class="rsub">${cm.tag || cm.coin ? "" : lead2(it, dots)}<span>${esc(sub)}${priceTag(it, sub)}</span></span>
     </button>
     <button class="star" data-star="${n}" aria-pressed="${S.fav.has(it.name)}" aria-label="좋아하는 메뉴">${heart(S.fav.has(it.name))}</button>
@@ -1424,7 +1450,7 @@ function renderStock(el) {
     const days = Math.round((today - ymd(e.d)) / 864e5);
     const sub = (byDate ? [stockCat(e), MEALS[e.m], e.r] : [dayLabel(e.d), MEALS[e.m], e.r, days > 0 ? `${days}일째` : "오늘"]).concat(e.from && e.n ? `${e.from} 대신` : "").filter(Boolean).join(" · ");
     return `<li class="${days >= 1 && isFresh(e) ? "stale" : ""}"><button class="gchk" data-eatsel="${esc(e.src)}" aria-pressed="${S.eatSel.has(e.src)}" aria-label="먹었어요"><svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg></button>
-      <span class="sbody"><span class="sname"><span>${esc(stockName(e))}${e.fz ? '<i class="tg fz">Frozen</i>' : ""}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
+      <span class="sbody"><span class="sname"><span><span class="dn" data-detail="${esc(stockName(e))}">${esc(stockName(e))}</span>${e.fz ? '<i class="tg fz">Frozen</i>' : ""}${e.q > 1 ? ` <i class="xq">×${e.q}</i>` : ""}</span></span><span class="ssub">${esc(sub)}</span></span></li>`;
   };
   // 전체 보기에서는 분류마다 묶고, 분류를 고르면 그것만
   const rest = (c) => groups.get(c).filter((e) => !hurry.includes(e));
@@ -1576,7 +1602,7 @@ function renderSheet() {
       ordered(s, by).map(({ name, q, it }, idx, arr) => {
         const nm = esc(name), tied = isSide(it) && idx > 0 && arr[idx - 1].it?.cat === it.cat;
         const coin = !it ? "" : kindChip(it) || `<span class="coin">${it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : ""}</span>`;
-        const label = soldChip(it) + (it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm) + (it?.shelf || (it?.hand && !it?.tag) ? `<i class="tg">${esc(it.shelf || "수제")}</i>` : "") + (it?.withSide ? `<i class="tg">+ ${esc(it.withSide)}</i>` : "") + (it?.cat === "냉동" ? '<i class="tg fz">Frozen</i>' : "") + (it?.drink ? '<i class="tg">음료</i>' : "");
+        const label = soldChip(it) + `<span class="dn" data-detail="${nm}">${it && !it.drink && it.coin == null ? `<mark>${nm}</mark>` : nm}</span>` + (it?.shelf || (it?.hand && !it?.tag) ? `<i class="tg">${esc(it.shelf || "수제")}</i>` : "") + (it?.withSide ? `<i class="tg">+ ${esc(it.withSide)}</i>` : "") + (it?.cat === "냉동" ? '<i class="tg fz">Frozen</i>' : "") + (it?.drink ? '<i class="tg">음료</i>' : "");
         const side = isSide(it), g = got[name], ke = esc(k);
         const lead = side ? `<span class="gsp"></span>`
           : `<button class="gchk${g === "swap" ? " sw" : ""}" data-got="${nm}" data-k="${ke}" aria-pressed="${!!g}"${fin ? " disabled" : ""} aria-label="가져왔어요">${g === "swap" ? '<svg viewBox="0 0 12 12"><path d="M2 4.200h8L7.800 2M10 7.800H2L4.200 10"/></svg>' : '<svg viewBox="0 0 12 12"><path d="M2.500 6.300 5 8.700 9.500 3.600"/></svg>'}</button>`;
@@ -1805,6 +1831,67 @@ function findItem(name) {
   for (const d of new Set(S.rows.map((r) => r.d))) for (const x of S.rests) for (const m of Object.keys(MEALS)) { const it = itemsFor(d, m, x.id).find((y) => y.name === name); if (it) return it; }
   return null;
 }
+// ---------- 메뉴 상세: 시중가 · 통계 · 별점 · 칼로리 · 다음에 나오는 날 · 하트 · 다시 나오면 담기 ----------
+const mealPassed = (d, m) => { const t = todayYmd(); if (d !== t) return d < t; const h = new Date(Date.now() + 9 * 3600e3).getUTCHours(); return m === "1" ? h >= 10 : h >= 20; };
+// 이 메뉴가 나오는 끼니(지나간 끼니는 빼고, 품절 아닌 것)
+function upcoming(name) {
+  const out = []; const seen = new Set();
+  for (const r of S.rows) { if (mealPassed(r.d, r.m)) continue; const k = `${r.d}|${r.m}|${r.r}`; if (seen.has(k)) continue;
+    const it = itemsFor(r.d, r.m, r.r).find((x) => x.name === name); if (it) { seen.add(k); out.push({ d: r.d, m: r.m, r: r.r, it }); } }
+  return out.sort((a, b) => (a.d + a.m).localeCompare(b.d + b.m));
+}
+// 다시 나오면 담기: 나오는 가장 이른 끼니에, 코인 한도 안이면 한 번 담고 목록에서 뺀다
+function applyWants() {
+  if (!S.want?.size) return; S.applying = true; let added = [];
+  try {
+    for (const name of [...S.want]) {
+      for (const u of upcoming(name)) {
+        if (u.it.sold) continue;
+        const k = keyOf(u.d, u.m, u.r), p = S.picks[k] || { items: {} }; if (p.done) continue;
+        if (p.items?.[name]) { S.want.delete(name); break; }
+        const items = itemsFor(u.d, u.m, u.r), sel = { ...(p.items || {}), [name]: 1 }, b = budget(items, sel, portionsOf(k));
+        if (b.over || ((b.pickIn) && b.coins > b.base)) continue;
+        S.picks[k] = { ...p, items: sel }; S.want.delete(name);
+        added.push(`${name} → ${dayLabel(u.d)} ${MEALS[u.m]}`); break;
+      }
+    }
+  } finally { S.applying = false; }
+  if (added.length) { save(); toast(`기다리던 메뉴를 담았어요: ${added[0]}${added.length > 1 ? ` 외 ${added.length - 1}개` : ""}`); }
+}
+async function openDetail(name) {
+  S.detail = name;
+  const it = findItem(name), f = freq();
+  const got = Object.values(S.picks).reduce((a, p) => a + (p?.done && p.got?.[name] === "ok" ? (p.items?.[name] || 1) : 0), 0);
+  const eaten = S.eaten.filter((e) => stockName(e) === name), last = eaten.length ? eaten[eaten.length - 1] : null;
+  const stock = S.stock.filter((e) => stockName(e) === name).reduce((a, e) => a + (e.q || 1), 0);
+  const ups = upcoming(name), rn = (id) => S.rests.find((x) => x.id === id)?.name || id;
+  const md = (d) => `${+d.slice(4, 6)}/${+d.slice(6, 8)}`;
+  let price = it?.price ? it : null;
+  if (!price) { try { const mcp = await claude.use("mcp"); const r = mcp?.getPrice ? await mcp.getPrice(name) : null; if (r?.pr > 0) price = { price: r.pr, est: r.ps === "est", psrc: r.ps }; } catch (_) {} }
+  if (S.detail !== name) return;
+  const dots = it ? (it.drink ? '<i class="o"></i>' : it.coin ? "<i></i>".repeat(it.coin) : "") : "";
+  const chips = it ? [kindChip(it) || (dots ? `<span class="coin">${dots}</span>` : ""), it.cat ? `<i class="tg">${esc(it.cat)}</i>` : "", it.shelf ? `<i class="tg">${esc(it.shelf)}</i>` : "", it.hand ? '<i class="tg">수제</i>' : "", isNew(it) ? '<i class="nw">NEW</i>' : "", it.sold ? '<i class="sold">품절</i>' : ""].join("") : "";
+  const photo = it?.photo && S.canPhoto ? `<img class="dph" alt="" src="${esc(PHOTO_BASE + it.photo)}">` : "";
+  const stat = (n, l) => `<div><b>${n}</b><small>${l}</small></div>`;
+  const el = $("sheet");
+  el.innerHTML = `<button class="scrim" id="sheetclose" aria-label="닫기"></button><div class="panel psheet dsheet" role="dialog" aria-label="메뉴 정보"><div class="grab"></div>
+    <div class="sh"><b>Menu</b><button id="sheetclose2" aria-label="닫기"><svg viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8"/></svg></button></div>
+    ${photo}<p class="dname">${esc(name)}</p>${chips ? `<p class="dchips">${chips}</p>` : ""}
+    <ul class="rows drows">
+      <li><span>시중가</span>${price ? `<button class="lnk" data-dprice="${esc(name)}">${won(price)}<small>출처 ›</small></button>` : "<em>–</em>"}</li>
+      <li><span>칼로리</span><em>${it?.kcal ? `${it.kcal} kcal` : "–"}</em></li>
+      <li><span>별점</span>${starsHtml(name)}</li>
+    </ul>
+    <div class="dstat">${stat(f[name] || 0, "담음")}${stat(got, "가져옴")}${stat(eaten.length, "먹음")}${stat(stock, "재고")}</div>
+    <p class="dnote">${[last ? `마지막으로 먹은 날 ${md(last.a ? new Date(last.a + 9 * 3600e3).toISOString().slice(0, 10).replace(/-/g, "") : last.d)}` : "", it?.fs ? `처음 나온 날 ${md(it.fs)}${it.fs <= "20260914" ? " 이전" : ""}` : ""].filter(Boolean).join(" · ")}</p>
+    ${ups.length ? `<p class="gh">다음에 나오는 끼니</p><ul class="rows drows">${ups.slice(0, 4).map((u) => `<li><span>${dayLabel(u.d)} ${MEALS[u.m]}</span><em>${esc(rn(u.r))}${u.it.sold ? " · 품절" : ""}</em></li>`).join("")}</ul>` : `<p class="gh">다음에 나오는 끼니</p><p class="dnote">당분간 메뉴에 없어요.</p>`}
+    <div class="dact">
+      <button class="ate" data-star="${esc(name)}" aria-pressed="${S.fav.has(name)}">${heart(S.fav.has(name))}좋아하는 메뉴</button>
+      <button class="ate" data-want="${esc(name)}" aria-pressed="${S.want.has(name)}">${S.want.has(name) ? "다시 나오면 담기 켜짐" : "다시 나오면 담기"}</button>
+    </div>
+    <p class="dnote">다시 나오면 담기를 켜 두면, 이 메뉴가 나오는 가장 이른 끼니에 코인이 남아 있을 때 자동으로 담아요.</p></div>`;
+  el.hidden = false;
+}
 async function openPrice(name) {
   const mcp = await claude.use("mcp"), canEdit = !!mcp?.setPrice;
   let it = findItem(name);
@@ -1840,6 +1927,8 @@ function onTap(e) {
     const it = itemsFor(S.date, S.meal).find((x) => x.name === ph.dataset.photo); if (!it?.photo) return;
     const el = $("photo"); el.innerHTML = `<img alt="" src="${esc(PHOTO_BASE + it.photo)}"><span>${esc(it.name)}</span>`; el.hidden = false; return;
   }
+  const dt = e.target.closest("[data-detail]");
+  if (dt && !e.target.closest("#sheet")) { e.preventDefault(); e.stopPropagation(); openDetail(dt.dataset.detail); return; }
   const pr = e.target.closest("[data-price]");
   if (pr) { openPrice(pr.dataset.price); return; }
   const b = e.target.closest("button");
@@ -1853,7 +1942,7 @@ function onTap(e) {
   if (b.dataset.rday) { S.repDay = b.dataset.rday; renderSheet(); return; }
   if (b.dataset.rmonth) { S.repMonth = b.dataset.rmonth; renderSheet(); scrollTo(0, 0); return; }
   const k = b.dataset.k || keyOf(S.date, S.meal);
-  if (b.id === "sheetclose" || b.id === "sheetclose2") { $("sheet").hidden = true; $("sheet").innerHTML = ""; return; }
+  if (b.id === "sheetclose" || b.id === "sheetclose2") { $("sheet").hidden = true; $("sheet").innerHTML = ""; S.detail = null; return; }
   if (b.id === "stamp") { refreshMenu(); return; }
   if (b.dataset.qopen != null) { S.q = ""; render(); $("q")?.focus(); return; }
   if (b.dataset.qclose != null) { S.q = null; render(); return; }
@@ -1883,7 +1972,7 @@ function onTap(e) {
   if (b.dataset.rate != null) { // 별점: 같은 점수를 다시 누르면 지운다
     const v = +b.dataset.v, nm = b.dataset.rate;
     if (S.rate[nm] === v) delete S.rate[nm]; else S.rate[nm] = v;
-    cache.clear(); save(); render(); return;
+    cache.clear(); save(); render(); if (S.detail) openDetail(S.detail); return;
   }
   if (b.dataset.uneat != null) { // 되돌리기
     const e = S.eaten[+b.dataset.uneat]; if (!e) return;
@@ -1932,7 +2021,9 @@ function onTap(e) {
   if (b.id === "share") { $("shmenu").hidden = !$("shmenu").hidden; return; }
   if (b.id === "clear") { delete S.picks[k]; save(); render(); return; }
   if (b.id === "reload") { load(true); return; }
-  if (b.dataset.star != null) { const n = b.dataset.star; S.fav.has(n) ? S.fav.delete(n) : S.fav.add(n); save(); render(); return; }
+  if (b.dataset.star != null) { const n = b.dataset.star; S.fav.has(n) ? S.fav.delete(n) : S.fav.add(n); save(); render(); if (S.detail) openDetail(S.detail); return; }
+  if (b.dataset.want != null) { const n = b.dataset.want; S.want.has(n) ? S.want.delete(n) : S.want.add(n); save(); applyWants(); render(); if (S.detail) openDetail(S.detail); return; }
+  if (b.dataset.dprice != null) { S.detail = null; openPrice(b.dataset.dprice); return; }
   if (b.dataset.tog != null) { // 목록의 체크 원: 누르면 담고, 다시 누르면 뺀다
     const p = S.picks[k] || (S.picks[k] = { items: {} });
     if (!p.items || typeof p.items !== "object") p.items = {};

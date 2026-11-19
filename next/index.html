@@ -132,6 +132,15 @@ body.tab-menu .rtabs { gap: 18px; }
 .rtabs { display: flex; gap: 14px; }
 .rtabs button { font-size: 13px; color: var(--muted); padding: 2px 0; }
 .rtabs button[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+/* ··· : 투게더홀·폴라리스홀. 보이지 않는 select 를 덮어 휴대폰 기본 선택창을 쓴다 */
+.rmore { position: relative; display: inline-flex; align-items: baseline; font-size: 13px; color: var(--muted); padding: 2px 0; }
+body.tab-menu .rmore { font-size: 15px; }
+.rmore.on { color: var(--ink); font-weight: 600; }
+.rmore .rml { display: inline-flex; align-items: center; gap: 5px; letter-spacing: .08em; }
+.rmore.on .rml { letter-spacing: 0; }
+.rmore .cv { width: 6px; height: 6px; border-right: 1.4px solid currentColor; border-bottom: 1.4px solid currentColor; transform: translateY(-2px) rotate(45deg); opacity: .6; }
+.rmore select { position: absolute; inset: -6px -8px; width: calc(100% + 16px); opacity: 0; font-size: 16px; cursor: pointer; appearance: none; -webkit-appearance: none; border: 0; }
+.rmore:has(select:focus-visible) { outline: 2px solid var(--edge); outline-offset: 3px; border-radius: 4px; }
 #stamp { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; padding: 6px 0 6px 10px; margin: -6px 0; }
 #stamp svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 #stamp.busy svg { animation: spin .9s linear infinite; }
@@ -712,6 +721,13 @@ body:not(.tab-menu) .band .util { display: none; }
 .pill u.on, .pill u.x, .pill u.ov { box-shadow: none; }
 .pill + .pill { margin-left: 8px; padding-left: 10px; }
 .pill.o u.on, .mc.cur .pill.o u.on { background: radial-gradient(circle, currentColor 0 2.3px, transparent 2.8px); box-shadow: inset 0 0 0 1.5px currentColor; }
+/* 식당이 셋 이상 보일 때: 이름을 동그라미 위로 올리고 동그라미를 줄인다 */
+#meter.tight .mc { flex-direction: column; align-items: flex-start; gap: 3px; padding: 6px 8px; }
+#meter.tight .mc .mn { align-self: flex-start; }
+#meter.tight .pill { gap: 3px; }
+#meter.tight .pill u { width: 8px; height: 8px; }
+#meter.tight .pill + .pill { margin-left: 5px; padding-left: 6px; }
+#meter.tight .pill.o u.on, #meter.tight .mc.cur .pill.o u.on { background: radial-gradient(circle, currentColor 0 1.8px, transparent 2.3px); box-shadow: inset 0 0 0 1.3px currentColor; }
 .dls { gap: 7px; }
 .mc { padding: 8px 12px; }
 .mc .mn { width: 20px; flex: none; }
@@ -864,7 +880,12 @@ const kindChip = (it) => { const t = (it.tag || "").toUpperCase(); if (!t) retur
 const lead2 = (it, dots) => kindChip(it) || (dots ? `<span class="coin">${dots}</span>` : "");
 const heart = (on) => `<svg class="hrt${on ? " f" : ""}" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6 2.6 8.3a3.2 3.2 0 0 1 4.5-4.6L8 4.6l.9-.9a3.2 3.2 0 0 1 4.5 4.6z"/></svg>`;
 // 트레이에서 쓰는 짧은 식당 이름
-const SHORT = { REST000007: "R5", CAF04: "FH" };
+const SHORT = { REST000007: "R5", CAF04: "FH", CAF05: "TH", CAF38: "PH" };
+// 늘 보이는 식당은 둘 — 투게더홀·폴라리스홀은 ··· 안에서 고른다
+const MAIN_RESTS = ["REST000007", "CAF04"], REST_ORDER = [...MAIN_RESTS, "CAF05", "CAF38"];
+const restRank = (id) => (REST_ORDER.indexOf(id) + 1 || 99);
+// 미터에 보일 식당: 기본 둘 + 지금 보고 있는 곳 + 그날 담아 둔 곳
+const meterRests = () => S.rests.filter((x) => MAIN_RESTS.includes(x.id) || x.id === S.rest || Object.keys(MEALS).some((m) => Object.keys(S.picks[keyOf(S.date, m, x.id)]?.items || {}).length));
 // 아침·저녁: 날씨 앱처럼 해와 달
 const SUN = '<svg class="wx sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="4"/><path d="M10 1.8v2.3M10 15.9v2.3M1.8 10h2.3M15.9 10h2.3M4.2 4.2l1.6 1.6M14.2 14.2l1.6 1.6M4.2 15.8l1.6-1.6M14.2 5.8l1.6-1.6"/></svg>';
 const MOON = '<svg class="wx moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.6 12.6A6.6 6.6 0 0 1 7.4 4.4a6.6 6.6 0 1 0 8.2 8.2z"/><path class="st" d="M14.2 3.2l.45 1.05 1.05.45-1.05.45-.45 1.05-.45-1.05-1.05-.45 1.05-.45z"/></svg>';
@@ -1119,7 +1140,9 @@ function worthHtml(items, sel) {
 function render() {
   if (S.stateReady && S.want?.size && S.rows.length && !S.applying) applyWants();
   if (!S.rests.some((x) => x.id === S.rest)) S.rest = S.rests[0]?.id;
-  $("rests").innerHTML = S.rests.map((x) => `<button data-rest="${x.id}" aria-pressed="${x.id === S.rest}">${esc(x.name)}</button>`).join("");
+  { const extra = S.rests.filter((x) => !MAIN_RESTS.includes(x.id)), cur = extra.find((x) => x.id === S.rest);
+    $("rests").innerHTML = S.rests.filter((x) => MAIN_RESTS.includes(x.id)).map((x) => `<button data-rest="${x.id}" aria-pressed="${x.id === S.rest}">${esc(x.name)}</button>`).join("") +
+      (extra.length ? `<span class="rmore${cur ? " on" : ""}"><span class="rml" aria-hidden="true">${cur ? `${esc(cur.name)}<i class="cv"></i>` : "···"}</span><select id="restmore" aria-label="다른 식당">${cur ? "" : '<option value="" selected disabled>다른 식당</option>'}${extra.map((x) => `<option value="${x.id}"${x.id === S.rest ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></span>` : ""); }
   const dates = [...new Set(S.rows.filter((r) => r.r === S.rest).map((r) => r.d))];
   if (!dates.length) return;
   if (!dates.includes(S.date)) {
@@ -1372,9 +1395,11 @@ function renderTray(items, sel, n, k) {
     }
     return `<span class="dls" aria-hidden="true">${lines.join("")}</span>`; };
   const meals = Object.keys(MEALS).filter((m) => S.rows.some((r) => r.d === S.date && r.m === m));
-  $("meter").style.gridTemplateColumns = `auto repeat(${S.rests.length}, minmax(0, 1fr))`;
+  const mr = meterRests();
+  $("meter").style.gridTemplateColumns = `auto repeat(${mr.length}, minmax(0, 1fr))`;
+  $("meter").classList.toggle("tight", mr.length > 2);
   $("meter").innerHTML = meals.map((m) =>
-    `<b class="ml${m === S.meal ? " cur" : ""}" aria-label="${MEALS[m]}">${m === "1" ? SUN : MOON}</b>` + S.rests.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
+    `<b class="ml${m === S.meal ? " cur" : ""}" aria-label="${MEALS[m]}">${m === "1" ? SUN : MOON}</b>` + mr.map((x) => { const kk = keyOf(S.date, m, x.id), bb = budget(itemsFor(S.date, m, x.id), S.picks[kk]?.items || {}, portionsOf(kk));
       const np = portionsOf(kk);
       return `<button class="mc${m === S.meal && x.id === S.rest ? " cur" : ""}${bb.over ? " over" : ""}" data-slot="${m}|${x.id}" aria-label="${MEALS[m]} ${esc(x.name)} ${bb.coins}/${bb.base}코인, 음료 ${bb.drinks}/${bb.drinkMax}"><span class="mn">${esc(SHORT[x.id] || x.name)}</span>${pillOf(bb, np)}</button>`; }).join("")).join("");
   $("plabel").innerHTML = worthHtml(items, sel); // 끼니·식당은 미터의 진한 칸이 이미 말해 준다
@@ -1808,6 +1833,8 @@ function handle(e) {
 }
 // click 만 듣는다 — 브라우저는 스크롤 드래그를 click 으로 보내지 않는다
 document.addEventListener("click", (e) => handle(e), true);
+// ··· 에서 다른 식당을 고르면 그 식당 메뉴로 간다
+document.addEventListener("change", (e) => { if (e.target.id !== "restmore" || !e.target.value) return; S.rest = e.target.value; S.cat = null; S.catTouched = false; save(); render(); scrollTo(0, 0); });
 // 전달사항: 줄바꿈 가능, 쓰는 만큼 칸이 자란다
 const growMemo = (el) => { if (!el) return; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; };
 { let lastY = scrollY;
@@ -1846,7 +1873,7 @@ function applyWants() {
   try {
     for (const name of [...S.want]) {
       for (const u of upcoming(name)) {
-        if (u.it.sold) continue;
+        if (u.it.sold || !MAIN_RESTS.includes(u.r)) continue; // 자동으로는 R5·패밀리홀에만 담는다
         const k = keyOf(u.d, u.m, u.r), p = S.picks[k] || { items: {} }; if (p.done) continue;
         if (p.items?.[name]) { S.want.delete(name); break; }
         const items = itemsFor(u.d, u.m, u.r), sel = { ...(p.items || {}), [name]: 1 }, b = budget(items, sel, portionsOf(k));
@@ -2066,7 +2093,7 @@ async function load(refresh = false) {
     S.rows = parsePayload(res.payload);
     const seen = new Map();
     for (const r of S.rows) if (!seen.has(r.r)) seen.set(r.r, r.rn || r.r);
-    S.rests = [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => (b.id === "REST000007") - (a.id === "REST000007"));
+    S.rests = [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => restRank(a.id) - restRank(b.id));
     cache.clear();
     const u = S.rows.reduce((a, r) => (r.u > a ? r.u : a), "");
     if (u) {

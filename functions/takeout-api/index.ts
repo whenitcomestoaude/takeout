@@ -52,6 +52,9 @@ async function fillPhotos(sql: any): Promise<number> {
       set += u.count;
     }
   }
+  // 투게더홀·폴라리스홀의 [브랜드 콜라보] 메뉴는 코인 표기 없이 올라오기도 한다 — 현장에서는 4코인
+  await sql`update welstory.menu_item set coin = 4, tag = '4Coin'
+    where restaurant_code in ('CAF05', 'CAF38') and coin is null and raw_name like '%브랜드 콜라보%' and menu_dt >= ${today()}`;
   return set;
 }
 
